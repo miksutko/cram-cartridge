@@ -148,8 +148,11 @@ export default function App() {
 
   if (screen.name === 'gallery') return <Gallery onBack={() => go({ name: 'start' })} />
 
+  // The start screen never waits for the backend check (it pings Snowflake and can be slow);
+  // screens that need the backend wait for it.
   let body = null
-  if (!ready) body = <Loading text={LINES.loading} />
+  if (!ready && screen.name !== 'start' && screen.name !== 'name' && screen.name !== 'manual' && screen.name !== 'settings')
+    body = <Loading text={LINES.loading} />
   else
     switch (screen.name) {
       case 'start':
