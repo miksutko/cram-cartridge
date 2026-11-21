@@ -245,35 +245,66 @@ export const yeti = build(
   { idle: [0, 1], attack: [2], hurt: [1] },
 )
 
-/** Phoenix: ember wings and a flowing flame tail. Faces left. 64x64. */
+/** Phoenix: a firebird rising, wings raised in layered flame feathers, a long plumed tail. Faces left. 64x64. */
 export const phoenix = build(
   'phoenix',
   64,
   64,
   3,
   (p, pal, f) => {
-    const flame = pal.mat(['#3a0a06', '#a01a0a', '#e0441a', '#ff8a2a', '#ffd060'])
-    const ember = pal.mat(['#2a0604', '#6a1008', '#8a1a0c', '#b8300e', '#e05020'])
+    const flame = pal.mat(['#3a0a06', '#b8240c', '#ec4e16', '#ff9028', '#ffd86a'])
+    const gold = pal.mat(['#4a2008', '#c0700e', '#f0a020', '#ffd050', '#fff4b0'])
+    const deep = pal.mat(['#2a0408', '#7a1010', '#a01c12', '#c8381a', '#e8602a'])
     const beak = pal.mat(['#3a2408', '#a06a14', '#e0a020', '#f8d050', '#fff0a0'])
-    const white = pal.char('#fff8e0')
-    const eye = pal.char('#1a0a00')
-    const w = f === 1 ? 4 : f === 2 ? -2 : 0
-    p.fill(poly([36, 40], [46, 62], [39, 55], [34, 63], [30, 53], [25, 60], [29, 40]), flame)
-    p.fill(poly([36, 27], [60, 4 + w], [56, 17 + w], [63, 22 + w], [50, 30], [40, 36]), ember)
-    p.fill(ellipse(34, 32, 8, 10), flame)
-    p.fill(poly([30, 28], [5, 8 + w], [14, 23 + w], [3, 29 + w], [22, 36], [31, 38]), flame)
-    for (const [x0, y0] of [[24, 30], [18, 26], [12, 22]] as [number, number][])
-      p.fill(seg(x0, y0, x0 - 8, y0 - 8 + w, 0.6), ember, { flat: 'm' })
-    p.fill(ellipse(24, 20, 5.5, 5), flame)
-    p.fill(poly([20, 18], [13, 22], [20, 23]), beak)
-    p.dot(22, 19, eye).dot(23, 18, white)
-    p.fill(poly([25, 16], [22, 5 + (f % 2)], [28, 15]), flame)
-    p.fill(poly([28, 17], [32, 7], [31, 18]), flame)
-    p.fill(poly([22, 16], [16, 9 + (f % 2)], [23, 18]), flame)
-    p.dots([[33, 31], [35, 34], [31, 35]], white)
-    const sparks: [number, number][] = f === 0 ? [[8, 40], [50, 44], [20, 50]] : f === 1 ? [[10, 36], [54, 40], [18, 56]] : [[6, 44], [48, 48], [22, 46]]
-    p.dots(sparks, flame.h)
+    const eye = pal.char('#1a0400')
+    const glint = pal.char('#ffffff')
+    const ember = pal.char('#ffe890')
+    const w = f === 1 ? -3 : f === 2 ? 2 : 0 // wing beat
+    const b = f === 1 ? -1 : 0 // body lifts with the beat
+    // tail: three long plumes sweeping down and back
+    p.fill(path([[36, 42 + b], [42, 52], [50, 58], [58, 62]], 4, 1), deep)
+    p.fill(path([[34, 44 + b], [36, 54], [40, 62]], 3.5, 1), flame)
+    p.fill(path([[38, 42 + b], [48, 48], [58, 50], [63, 46]], 3.4, 0.8), flame)
+    p.fill(ellipse(58, 62, 2.5, 1.6), gold).fill(ellipse(62, 46, 1.8, 2), gold)
+    // far wing (behind), raised up and back, three feather tiers
+    p.fill(poly([38, 30 + b], [46, 8 + w], [54, 2 + w], [62, 6 + w], [58, 14 + w], [62, 20 + w], [54, 24 + w], [56, 30 + w], [44, 36 + b]), deep)
+    p.fill(poly([40, 30 + b], [48, 12 + w], [56, 8 + w], [52, 18 + w], [46, 30 + b]), flame, { noHi: true })
+    // body: a proud breast curving into the neck
+    p.fill(ellipse(36, 36 + b, 9, 11), flame)
+    p.fill(ellipse(32, 40 + b, 5.5, 7), gold)
+    p.fill(path([[36, 28 + b], [30, 20 + b], [26, 16 + b]], 5, 4), flame)
+    // near wing (in front): big flame wing raised high, layered feathers
+    p.fill(poly([30, 30 + b], [20, 14 + w], [12, 4 + w], [4, 2 + w], [8, 10 + w], [2, 14 + w], [8, 20 + w], [2, 26 + w], [12, 30 + w], [20, 38 + b], [30, 38 + b]), flame)
+    p.fill(poly([28, 32 + b], [18, 20 + w], [10, 12 + w], [12, 22 + w], [8, 28 + w], [18, 34 + b]), gold, { noHi: true })
+    for (const [x0, y0, x1, y1] of [[26, 32, 8, 6], [24, 34, 4, 15], [22, 36, 6, 25]] as [number, number, number, number][])
+      p.fill(seg(x0, y0 + b, x1, y1 + w, 0.55), deep, { flat: 'm' })
+    // head on top of the wings so the face is always visible: crest of flame plumes, hooked beak
+    p.fill(ellipse(24, 15 + b, 5.5, 5), flame)
+    p.fill(path([[26, 11 + b - 3], [28, 5 + b - 3], [32, 2 + b - 3]], 1.6, 0.6), gold)
+    p.fill(path([[28, 12 + b - 3], [33, 8 + b - 3], [38, 7 + b - 3]], 1.4, 0.5), flame)
+    p.fill(path([[24, 10 + b - 3], [23, 4 + b - 3], [25, 1 + b - 3]], 1.3, 0.5), gold)
+    p.fill(poly([20, 13 + b - 3], [13, 16 + b - 3], [15, 18 + b - 3], [20, 18 + b - 3]), beak)
+    p.dot(14, 17 + b, beak.o)
+    p.dot(22, 14 + b, eye).dot(23, 13 + b, glint)
+    // legs: feathered flame thighs, scaled gold shins, three-toed talons with dark claws
+    const talon = pal.char('#2a1404')
+    for (const [lx, side] of [[31, -1], [38, 1]] as [number, number][]) {
+      p.fill(ellipse(lx + 1, 45 + b, 3.4, 3), flame)
+      p.fill(seg(lx + 1, 47 + b, lx + side, 53 + b, 1.3, 1.1), gold)
+      p.dots([[lx + 1, 49 + b], [lx + side, 51 + b]], gold.d)
+      p.fill(seg(lx + side, 53 + b, lx + side - 3, 55 + b, 0.8), gold) // front toe
+      p.fill(seg(lx + side, 53 + b, lx + side, 56 + b, 0.8), gold) // middle toe
+      p.fill(seg(lx + side, 53 + b, lx + side + 3, 55 + b, 0.8), gold) // back toe
+      p.dots([[lx + side - 4, 56 + b], [lx + side, 57 + b], [lx + side + 4, 56 + b]], talon)
+    }
     p.outline().clean()
+    // rising embers (shift every frame)
+    const sparks: [number, number][][] = [
+      [[6, 40], [48, 36], [18, 50], [56, 28]],
+      [[8, 36], [50, 32], [20, 46], [58, 24]],
+      [[4, 44], [46, 40], [16, 54], [54, 32]],
+    ]
+    p.dots(sparks[f], ember)
   },
   { idle: [0, 1, 0, 2], attack: [1], hurt: [2] },
 )
