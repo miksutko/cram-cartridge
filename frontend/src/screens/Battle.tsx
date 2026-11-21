@@ -319,7 +319,12 @@ export function Battle({ userId, run, fight, items: startItems, score: startScor
           <div className="q-meta">
             <span>{fight.kind === 'blitz' ? 'BLITZ' : isBoss ? 'SUMMIT' : `LV${biome.level}`} · {question.subtopic}</span>
             {question.slot === 'memory' && <span className="tag tag-memory">YOU MISSED THIS</span>}
-            {question.slot === 'other_lecture' && <span className="tag tag-other">{DRAGON.otherLecture.toUpperCase()}: {question.deck_name}</span>}
+            {question.slot === 'other_lecture' && (
+              <span className="tag tag-other">
+                {DRAGON.otherLecture.toUpperCase()}: {question.deck_name}
+                {question.similarity != null && ` · MATCH ${question.similarity.toFixed(2)}`}
+              </span>
+            )}
             {items.length > 0 && !itemsOff && (
               <span className="q-items">
                 {items.map((it, i) => (

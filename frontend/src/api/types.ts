@@ -90,6 +90,8 @@ export interface FightQuestion {
   subtopic: string
   deck_name: string
   slot: 'memory' | 'other_lecture' | null
+  /** Cosine similarity to your latest miss (the dragon's other-lecture questions). */
+  similarity?: number | null
   /** PROPOSED: missing = "mc". */
   type?: 'mc' | 'typed'
   /** PROPOSED (Blitz): server-side time limit for this question. */
