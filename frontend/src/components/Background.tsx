@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { backgroundCanvas, drawAtmosphere, H, makeAtmos, SCREEN_H, W, type SceneId } from '../art/backgrounds'
+import { backgroundCanvas, drawAtmosphere, H, makeAtmos, W, type SceneId } from '../art/backgrounds'
 import { prefersReducedMotion } from '../game/settings'
 
 interface Props {
@@ -16,12 +16,8 @@ export function Background({ biome, className = '', still = false }: Props) {
   useEffect(() => {
     const ctx = base.current?.getContext('2d')
     if (ctx) {
-      const scene = backgroundCanvas(biome)
-      const extra = SCREEN_H - H
-      ctx.clearRect(0, 0, W, SCREEN_H)
-      ctx.drawImage(scene, 0, 0)
-      // extend the ground: repeat the bottom strip of the scene below it
-      ctx.drawImage(scene, 0, H - extra, W, extra, 0, H, W, extra)
+      ctx.clearRect(0, 0, W, H)
+      ctx.drawImage(backgroundCanvas(biome), 0, 0)
     }
   }, [biome])
 
@@ -48,7 +44,7 @@ export function Background({ biome, className = '', still = false }: Props) {
 
   return (
     <div className={`bg ${className}`}>
-      <canvas ref={base} width={W} height={SCREEN_H} />
+      <canvas ref={base} width={W} height={H} />
       <canvas ref={top} width={W} height={H} />
     </div>
   )

@@ -17,7 +17,7 @@ export function Gallery({ onBack }: { onBack: () => void }) {
         </button>
         <p>All art is drawn in code (src/art). Drop src/assets/sprites/&lt;id&gt;.png to replace any sprite.</p>
       </header>
-      <h2>BACKGROUNDS (240×160, 2×, animated)</h2>
+      <h2>BACKGROUNDS (240×184, 2×, animated)</h2>
       <div className="g-grid">
         {(Object.keys(BIOMES) as BiomeId[]).map((b) => (
           <figure key={b} className="g-card">

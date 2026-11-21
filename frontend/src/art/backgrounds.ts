@@ -8,11 +8,11 @@ export type BiomeId = 'l1' | 'l2' | 'l3' | 'l4' | 'l5' | 'summit'
 /** Every drawable scene: the six biomes plus the bright dawn title scene. */
 export type SceneId = BiomeId | 'title'
 export const W = 240
-export const H = 160
+export const H = 184
 /** Where feet touch the ground in battle scenes. */
 export const GROUND = 104
-/** The game screen is taller than the painted scene: the ground strip is repeated below it. */
-export const SCREEN_H = 184
+/** The game screen height; every scene paints its floor down to it. */
+export const SCREEN_H = H
 
 const BAYER = [
   [0, 8, 2, 10],

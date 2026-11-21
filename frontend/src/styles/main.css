@@ -2860,8 +2860,8 @@ body,
   margin-top: 4px;
 }
 
-/* Treasure: the closed chest sits on the painted ground and glints; opened, it pops, glows and
-   flies up out of the way so the item cards have the lower half of the screen. */
+/* Treasure: the closed chest sits on the painted ground and glints; opened, it pops in place and
+   shines (the taller screen leaves room for the item cards below it). */
 .treasure .chest {
   top: auto;
   bottom: 56px;
@@ -2871,7 +2871,7 @@ body,
 }
 
 .treasure .chest.open {
-  animation: chest-rise 650ms cubic-bezier(0.2, 0.9, 0.3, 1.15) forwards;
+  animation: chest-pop 420ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
 }
 
 .treasure .chest.open img {
@@ -2897,15 +2897,18 @@ body,
   }
 }
 
-@keyframes chest-rise {
+@keyframes chest-pop {
   0% {
-    transform: translate(-50%, 0);
+    transform: translateX(-50%);
   }
-  25% {
-    transform: translate(-50%, 3px) scale(1.06, 0.92);
+  35% {
+    transform: translateX(-50%) scale(1.08, 0.9);
+  }
+  70% {
+    transform: translateX(-50%) translateY(-3px) scale(0.97, 1.05);
   }
   100% {
-    transform: translate(-50%, -58px);
+    transform: translateX(-50%);
   }
 }
 
@@ -2927,13 +2930,10 @@ body,
     animation: none;
   }
 
-  .treasure .chest.open {
-    transform: translate(-50%, -58px);
-  }
 }
 
-/* Taller screen (240x184): the painted scene is 160 high and its ground strip is repeated below,
-   so the question box has room under the fighters. Ground level is now 80px up from the bottom. */
+/* Taller screen (240x184): every scene paints its floor down to the new bottom (H = 184), so the
+   question box has room under the fighters. Ground level is now 80px up from the bottom. */
 .screen {
   height: 184px;
 }
@@ -3018,4 +3018,10 @@ body,
 
 .stats-grid.stack .stats div {
   font-size: 4px;
+}
+
+/* the art gallery shows scenes at 2x */
+.g-bg,
+.g-scene {
+  height: 368px;
 }
