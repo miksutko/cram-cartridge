@@ -2189,3 +2189,31 @@ canvas {
 .name-entry .hint-line {
   position: static;
 }
+
+.shelf-wood {
+  top: 67px;
+}
+
+.cart-meta {
+  top: 46px;
+  font-size: 3.5px;
+}
+
+.shelf-row {
+  max-height: 60px;
+}
+
+.shelf-detail {
+  position: absolute !important;
+  left: 8px;
+  right: 8px;
+  top: 82px;
+  font-size: 4px;
+}
+
+.shelf-levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  color: var(--dim);
+}

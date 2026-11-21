@@ -17,8 +17,8 @@ interface Props {
 }
 
 const STEP = 30
-const PAD_TOP = 34
-const PAD_BOTTOM = 40
+const PAD_TOP = 44
+const PAD_BOTTOM = 76
 const MAP_W = 240
 
 const lastSeen = new Map<string, string>()
@@ -132,7 +132,7 @@ export function MapScreen({ run, onEnter, onShelf, onRunOver }: Props) {
   const marker = placed.find((p) => p.node.node_id === markerAt) ?? current
   useEffect(() => {
     const el = scroller.current
-    if (el && marker) el.scrollTo({ top: Math.max(0, marker.y - 80), behavior: 'smooth' })
+    if (el && marker) el.scrollTo({ top: Math.max(0, marker.y - 70), behavior: 'smooth' })
   }, [marker])
 
   const enter = () => {

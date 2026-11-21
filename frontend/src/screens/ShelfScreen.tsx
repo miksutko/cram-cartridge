@@ -123,6 +123,28 @@ export function ShelfScreen({ userId, busy, onPlay, onBack, onManual }: Props) {
         </div>
       )}
       {decks && decks.length === 0 && <div className="shelf-empty">{LINES.emptyShelf}</div>}
+      {decks && (
+        <PixelBox className="shelf-detail">
+          {sel < decks.length ? (
+            <>
+              <div className="msg-title">{decks[sel].name}</div>
+              <div className="shelf-levels">
+                {(decks[sel].subtopics ?? []).slice(0, 5).map((s, i) => (
+                  <span key={s}>
+                    LV{i + 1} {s}
+                  </span>
+                ))}
+                <span>SUMMIT Retep</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="msg-title">{LINES.insert}</div>
+              <div className="dim">Upload a PDF of lecture slides to forge a new cartridge.</div>
+            </>
+          )}
+        </PixelBox>
+      )}
       <div className="hint-line bottom">◀ ▶ PICK · ENTER PLAY · H HOW TO PLAY · ESC BACK</div>
       {note && <div className="shelf-note">{note}</div>}
 
