@@ -310,6 +310,8 @@ def enter_node(run_id: str, node_id: str) -> dict:
     # Building a boss fight may call Snowflake; do it outside the lock.
     fight = _build_fight(run, node)
     with _lock:
+        if run.fight and run.fight.node.node_id == node_id:
+            return _fight_state(run)  # a parallel request built it first; keep that one
         if not fight.questions:
             raise GameError(422, "No questions for this node")
         run.fight = fight
