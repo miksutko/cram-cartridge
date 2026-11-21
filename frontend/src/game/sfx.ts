@@ -77,6 +77,11 @@ export type SoundName = keyof typeof SOUNDS
 
 export function sfx(name: SoundName): void {
   if (!settings.get().sfx) return
+  // after the current event: creating the audio device never delays input
+  window.setTimeout(() => play(name), 0)
+}
+
+function play(name: SoundName): void {
   const a = audio()
   if (!a) return
   if (a.state === 'suspended') void a.resume()

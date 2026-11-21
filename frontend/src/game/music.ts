@@ -236,14 +236,15 @@ function start(slot: MusicSlot): void {
 /** Ask for a slot; it starts once the browser allows audio (first key or click). */
 export function playMusic(slot: MusicSlot): void {
   wanted = slot
-  if (unlocked) start(slot)
+  if (unlocked) window.setTimeout(() => wanted === slot && start(slot), 0)
 }
 
 /** Call from the first user gesture. */
 export function unlockMusic(): void {
   if (unlocked) return
   unlocked = true
-  if (wanted) start(wanted)
+  // after the key/click handler returns: audio start-up never delays input
+  window.setTimeout(() => wanted && start(wanted), 0)
 }
 
 settings.subscribe(() => {
