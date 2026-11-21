@@ -1,126 +1,206 @@
-import { useCallback, useEffect, useState } from 'react'
-import { api, getUserId } from './api'
-import { SnowflakePanel } from './components/SnowflakePanel'
-import { FightScreen } from './screens/FightScreen'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { api, backendMode, errorText, initBackend } from './api/client'
+import type { DeckSummary, Level, Report, RunOver } from './api/types'
+import { ConsoleFrame } from './components/ConsoleFrame'
+import { DevPanel } from './components/DevPanel'
+import { Loading, MessageBox } from './components/ui'
+import { LINES } from './game/content'
+import { playMusic, unlockMusic } from './game/music'
+import { playerName, settings } from './game/settings'
+import { getUserId } from './game/storage'
+import { useStore } from './game/store'
+import { Gallery } from './screens/Gallery'
+import { Manual } from './screens/Manual'
 import { MapScreen } from './screens/MapScreen'
+import { NodeScreen } from './screens/NodeScreen'
 import { ResultsScreen } from './screens/ResultsScreen'
+import { SettingsScreen } from './screens/SettingsScreen'
 import { ShelfScreen } from './screens/ShelfScreen'
 import { StartScreen } from './screens/StartScreen'
-import type { DeckSummary, Health, RunOver, TraceEntry, TraceStep } from './types'
+import { NameScreen } from './screens/NameScreen'
 
-type Screen =
-  | { name: 'start' }
+export type Screen =
+  | { name: 'start'; attract?: boolean }
+  | { name: 'name'; then: 'shelf' | 'settings' }
   | { name: 'shelf' }
-  | { name: 'map'; runId: string }
-  | { name: 'fight'; runId: string; nodeId: string }
-  | { name: 'results'; runId: string; result: RunOver }
+  | { name: 'map' }
+  | { name: 'node'; nodeId: string; kind: string }
+  | { name: 'results'; result: RunOver }
+  | { name: 'manual'; back: Screen }
+  | { name: 'settings'; back: Screen }
+  | { name: 'gallery' }
+
+/** What the client remembers about the current run (the server owns the real state). */
+export interface RunCtx {
+  runId: string
+  deck: DeckSummary
+  before: Report | null
+  quotesSeen: number
+  bosses: string[]
+  lastLevel: Level | null
+  started: number
+}
 
 const userId = getUserId()
 
-function App() {
-  const [screen, setScreen] = useState<Screen>({ name: 'start' })
-  const [deck, setDeck] = useState<DeckSummary | null>(null)
-  const [busyDeck, setBusyDeck] = useState<string | null>(null)
+function screenFromHash(): Screen {
+  return window.location.hash === '#/gallery' ? { name: 'gallery' } : { name: 'start', attract: true }
+}
+
+export default function App() {
+  const [screen, setScreenState] = useState<Screen>(screenFromHash)
+  const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [health, setHealth] = useState<Health | null>(null)
-  const [traces, setTraces] = useState<TraceEntry[]>([])
-  const [panelOpen, setPanelOpen] = useState(false)
+  const [run, setRun] = useState<RunCtx | null>(null)
+  const [busy, setBusy] = useState(false)
+  const mode = useStore(backendMode)
+  useStore(settings)
+  const runRef = useRef(run)
+  useEffect(() => {
+    runRef.current = run
+  }, [run])
+
+  const go = useCallback((s: Screen) => {
+    setScreenState(s)
+    const hash = `#/${s.name}`
+    if (window.location.hash !== hash) window.history.replaceState(null, '', hash)
+  }, [])
 
   useEffect(() => {
-    let alive = true
-    api
-      .health()
-      .then((h) => {
-        if (alive) setHealth(h)
-      })
-      .catch(() => {
-        if (alive) setHealth({ ok: false, snowflake: false, error: 'backend offline' })
-      })
+    initBackend().finally(() => setReady(true))
+    const onHash = () => {
+      if (window.location.hash === '#/gallery') setScreenState({ name: 'gallery' })
+    }
+    window.addEventListener('hashchange', onHash)
+    const unlock = () => unlockMusic()
+    window.addEventListener('keydown', unlock, { once: true })
+    window.addEventListener('pointerdown', unlock, { once: true })
     return () => {
-      alive = false
+      window.removeEventListener('hashchange', onHash)
+      window.removeEventListener('keydown', unlock)
+      window.removeEventListener('pointerdown', unlock)
     }
   }, [])
 
-  const addTrace = useCallback((label: string, steps: TraceStep[]) => {
-    setTraces((list) => [{ id: Date.now(), label, steps }, ...list].slice(0, 20))
-  }, [])
+  useEffect(() => {
+    const slot =
+      screen.name === 'start' || screen.name === 'name' || screen.name === 'manual' || screen.name === 'settings'
+        ? 'title'
+        : screen.name === 'shelf'
+          ? 'shelf'
+          : screen.name === 'map'
+            ? 'map'
+            : screen.name === 'results'
+              ? screen.result.won
+                ? 'victory'
+                : 'defeat'
+              : null
+    if (slot) playMusic(slot)
+  }, [screen])
 
-  function play(chosen: DeckSummary) {
-    setBusyDeck(chosen.deck_id)
-    setError(null)
-    api
-      .startRun(userId, chosen.deck_id)
-      .then((run) => {
-        setDeck(chosen)
-        setScreen({ name: 'map', runId: run.run_id })
-      })
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setBusyDeck(null))
-  }
+  const startRun = useCallback(
+    async (deck: DeckSummary) => {
+      if (busy) return
+      setBusy(true)
+      setError(null)
+      try {
+        const before = await api.report(userId).catch(() => null)
+        const map = await api.startRun(userId, deck.deck_id, playerName())
+        setRun({ runId: map.run_id, deck, before, quotesSeen: 0, bosses: [], lastLevel: null, started: Date.now() })
+        go({ name: 'map' })
+      } catch (err) {
+        setError(errorText(err))
+      } finally {
+        setBusy(false)
+      }
+    },
+    [busy, go],
+  )
 
-  const toShelf = () => setScreen({ name: 'shelf' })
+  const startPressed = useCallback(() => {
+    if (settings.get().name === null) go({ name: 'name', then: 'shelf' })
+    else go({ name: 'shelf' })
+  }, [go])
 
-  let body
-  switch (screen.name) {
-    case 'start':
-      body = <StartScreen onStart={toShelf} />
-      break
-    case 'shelf':
-      body = <ShelfScreen health={health} busyDeck={busyDeck} onPlay={play} onTrace={addTrace} />
-      break
-    case 'map':
-      body = (
-        <MapScreen
-          runId={screen.runId}
-          onEnter={(nodeId) => setScreen({ name: 'fight', runId: screen.runId, nodeId })}
-          onShelf={toShelf}
-        />
-      )
-      break
-    case 'fight':
-      body = (
-        <FightScreen
-          key={`${screen.runId}-${screen.nodeId}`}
-          userId={userId}
-          runId={screen.runId}
-          nodeId={screen.nodeId}
-          onTrace={addTrace}
-          onCleared={() => setScreen({ name: 'map', runId: screen.runId })}
-          onRunOver={(result) => setScreen({ name: 'results', runId: screen.runId, result })}
-        />
-      )
-      break
-    case 'results':
-      body = (
-        <ResultsScreen
-          userId={userId}
-          deckId={deck?.deck_id ?? ''}
-          deckName={deck?.name ?? ''}
-          result={screen.result}
-          onReplay={() => deck && play(deck)}
-          onShelf={toShelf}
-        />
-      )
-      break
-  }
+  if (screen.name === 'gallery') return <Gallery onBack={() => go({ name: 'start' })} />
 
-  const status = health === null ? 'checking' : health.snowflake ? 'on' : health.ok ? 'off' : 'down'
+  let body = null
+  if (!ready) body = <Loading text={LINES.loading} />
+  else
+    switch (screen.name) {
+      case 'start':
+        body = (
+          <StartScreen
+            attract={screen.attract ?? false}
+            onStart={startPressed}
+            onManual={() => go({ name: 'manual', back: { name: 'start' } })}
+            onSettings={() => go({ name: 'settings', back: { name: 'start' } })}
+          />
+        )
+        break
+      case 'name':
+        body = (
+          <NameScreen
+            onDone={() => go(screen.then === 'shelf' ? { name: 'shelf' } : { name: 'settings', back: { name: 'start' } })}
+            onBack={() => go(screen.then === 'shelf' ? { name: 'start' } : { name: 'settings', back: { name: 'start' } })}
+          />
+        )
+        break
+      case 'shelf':
+        body = <ShelfScreen userId={userId} busy={busy} onPlay={startRun} onBack={() => go({ name: 'start' })} onManual={() => go({ name: 'manual', back: { name: 'shelf' } })} />
+        break
+      case 'map':
+        body = run ? (
+          <MapScreen
+            run={run}
+            onEnter={(nodeId, kind) => go({ name: 'node', nodeId, kind })}
+            onShelf={() => go({ name: 'shelf' })}
+            onRunOver={(result) => go({ name: 'results', result })}
+          />
+        ) : null
+        break
+      case 'node':
+        body = run ? (
+          <NodeScreen
+            key={screen.nodeId}
+            userId={userId}
+            run={run}
+            nodeId={screen.nodeId}
+            setRun={setRun}
+            onDone={() => go({ name: 'map' })}
+            onRunOver={(result) => go({ name: 'results', result })}
+          />
+        ) : null
+        break
+      case 'results':
+        body = run ? (
+          <ResultsScreen userId={userId} run={run} result={screen.result} onReplay={() => startRun(run.deck)} onShelf={() => go({ name: 'shelf' })} />
+        ) : null
+        break
+      case 'manual':
+        body = <Manual onBack={() => go(screen.back)} />
+        break
+      case 'settings':
+        body = <SettingsScreen onBack={() => go(screen.back)} onChangeName={() => go({ name: 'name', then: 'settings' })} />
+        break
+    }
+
+  if (body === null) body = <MessageBox title="LOST ON THE MOUNTAIN" text="That run is gone. Back to the shelf!" onClose={() => go({ name: 'shelf' })} />
+
   return (
     <div className="app">
-      <header className="topbar">
-        <button type="button" className="logo" onClick={() => setScreen({ name: 'start' })}>
-          CRAM CARTRIDGE
-        </button>
-        <span className="alpha">ALPHA</span>
-        <button type="button" className={`sf-status ${status}`} onClick={() => setPanelOpen((o) => !o)}>
-          ❄ SNOWFLAKE {status === 'on' ? 'ON' : status === 'checking' ? '...' : status === 'down' ? 'NO BACKEND' : 'OFF'}
-        </button>
-      </header>
-      {error && <p className="bad banner">{error}</p>}
-      <main>{body}</main>
-      <SnowflakePanel open={panelOpen} health={health} traces={traces} onClose={() => setPanelOpen(false)} />
+      <ConsoleFrame badges={mode === 'mock' ? <div className="mock-badge">MOCK DATA</div> : null}>
+        <div className="screen-anim" key={screen.name === 'node' ? `node-${screen.nodeId}` : screen.name}>
+          {body}
+        </div>
+        {error && <MessageBox title={LINES.dusty} text={error} onClose={() => setError(null)} />}
+        {busy && (
+          <div className="overlay">
+            <Loading text={LINES.loading} />
+          </div>
+        )}
+      </ConsoleFrame>
+      <DevPanel />
     </div>
   )
 }
-
-export default App
