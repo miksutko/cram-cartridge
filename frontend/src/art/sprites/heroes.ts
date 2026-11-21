@@ -256,16 +256,17 @@ export const phoenix = build(
     const gold = pal.mat(['#4a2008', '#c0700e', '#f0a020', '#ffd050', '#fff4b0'])
     const deep = pal.mat(['#2a0408', '#7a1010', '#a01c12', '#c8381a', '#e8602a'])
     const beak = pal.mat(['#3a2408', '#a06a14', '#e0a020', '#f8d050', '#fff0a0'])
+    const head = pal.mat(['#3a1004', '#f07020', '#ffa030', '#ffd060', '#fff2b0']) // brighter than the wings
+    const wingFront = pal.mat(['#24030a', '#6a0a18', '#9a1420', '#c42a22', '#ea5a2a']) // deep crimson
     const eye = pal.char('#1a0400')
     const glint = pal.char('#ffffff')
     const ember = pal.char('#ffe890')
     const w = f === 1 ? -3 : f === 2 ? 2 : 0 // wing beat
     const b = f === 1 ? -1 : 0 // body lifts with the beat
-    // tail: three long plumes sweeping down and back
-    p.fill(path([[36, 42 + b], [42, 52], [50, 58], [58, 62]], 4, 1), deep)
-    p.fill(path([[34, 44 + b], [36, 54], [40, 62]], 3.5, 1), flame)
-    p.fill(path([[38, 42 + b], [48, 48], [58, 50], [63, 46]], 3.4, 0.8), flame)
-    p.fill(ellipse(58, 62, 2.5, 1.6), gold).fill(ellipse(62, 46, 1.8, 2), gold)
+    // one long tail: a single plume sweeping down and back, a bright stripe, a golden flame tip
+    p.fill(path([[38, 42 + b], [46, 50], [54, 54], [61, 52]], 4.2, 1.6), deep)
+    p.fill(path([[39, 43 + b], [47, 50], [54, 53]], 1.6, 0.6), flame, { flat: 'l' })
+    p.fill(ellipse(61, 51, 2.6, 3), gold)
     // far wing (behind), raised up and back, three feather tiers
     p.fill(poly([38, 30 + b], [46, 8 + w], [54, 2 + w], [62, 6 + w], [58, 14 + w], [62, 20 + w], [54, 24 + w], [56, 30 + w], [44, 36 + b]), deep)
     p.fill(poly([40, 30 + b], [48, 12 + w], [56, 8 + w], [52, 18 + w], [46, 30 + b]), flame, { noHi: true })
@@ -273,13 +274,15 @@ export const phoenix = build(
     p.fill(ellipse(36, 36 + b, 9, 11), flame)
     p.fill(ellipse(32, 40 + b, 5.5, 7), gold)
     p.fill(path([[36, 28 + b], [30, 20 + b], [26, 16 + b]], 5, 4), flame)
-    // near wing (in front): big flame wing raised high, layered feathers
-    p.fill(poly([30, 30 + b], [20, 14 + w], [12, 4 + w], [4, 2 + w], [8, 10 + w], [2, 14 + w], [8, 20 + w], [2, 26 + w], [12, 30 + w], [20, 38 + b], [30, 38 + b]), flame)
-    p.fill(poly([28, 32 + b], [18, 20 + w], [10, 12 + w], [12, 22 + w], [8, 28 + w], [18, 34 + b]), gold, { noHi: true })
+    // near wing (in front): deep crimson so it never blends into the bright head, orange feather tips
+    p.fill(poly([30, 30 + b], [20, 14 + w], [12, 4 + w], [4, 2 + w], [8, 10 + w], [2, 14 + w], [8, 20 + w], [2, 26 + w], [12, 30 + w], [20, 38 + b], [30, 38 + b]), wingFront)
+    p.fill(poly([28, 32 + b], [18, 20 + w], [10, 12 + w], [12, 22 + w], [8, 28 + w], [18, 34 + b]), flame, { noHi: true })
+    p.dots([[4, 2 + w], [3, 14 + w], [3, 26 + w], [5, 3 + w], [4, 15 + w]], gold.l)
     for (const [x0, y0, x1, y1] of [[26, 32, 8, 6], [24, 34, 4, 15], [22, 36, 6, 25]] as [number, number, number, number][])
       p.fill(seg(x0, y0 + b, x1, y1 + w, 0.55), deep, { flat: 'm' })
     // head on top of the wings so the face is always visible: crest of flame plumes, hooked beak
-    p.fill(ellipse(24, 15 + b, 5.5, 5), flame)
+    p.fill(ellipse(24, 14 + b, 6.5, 6), wingFront, { flat: 'o' }) // dark rim: the head stands out from the wing
+    p.fill(ellipse(24, 14 + b, 5.5, 5), head)
     p.fill(path([[26, 11 + b - 3], [28, 5 + b - 3], [32, 2 + b - 3]], 1.6, 0.6), gold)
     p.fill(path([[28, 12 + b - 3], [33, 8 + b - 3], [38, 7 + b - 3]], 1.4, 0.5), flame)
     p.fill(path([[24, 10 + b - 3], [23, 4 + b - 3], [25, 1 + b - 3]], 1.3, 0.5), gold)
