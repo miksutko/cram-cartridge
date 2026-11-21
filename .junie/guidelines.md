@@ -51,14 +51,18 @@ assets only; never copy art, characters or names from existing games.
 - Start servers in the background, check they respond, then stop them.
 
 ## API contract (agree changes with the other side first)
-- GET  /api/health
+- GET  /api/health -> {ok, snowflake, version | error}
+- GET  /api/decks?user_id= -> {decks:[{deck_id, name, main_topic, source, subtopics, slides}], snowflake_error}
 - POST /api/upload  multipart file,name -> {deck_id, name, main_topic, subtopics, slides, chunks, trace}
-- POST /api/run     {user_id, deck_id} -> {run_id, hp, max_hp, items, map}
+                    (+ cached: true when the same PDF was uploaded before)
+- POST /api/run     {user_id, deck_id, player_name?} -> {run_id, hp, max_hp, items, map, current_node_id, player_name}
 - GET  /api/map?run_id= -> {run_id, main_topic, hp, max_hp, items, map, current_node_id}
-- POST /api/node    {run_id, node_id} -> fight {kind, enemy, questions, trace} | treasure {kind, choices}
+- POST /api/node    {run_id, node_id} -> fight {kind, enemy, questions, current_q_id, trace} | treasure {kind, choices}
 - POST /api/answer  {user_id, run_id, q_id, choice | text} -> {correct, answer, explanation,
-                    taunt, quote|null, player_hp, enemy_hp, node_cleared, run_status, run_over|null}
-- GET  /api/report?user_id= -> {subtopics:[...], stats}
+                    taunt, quote|null, player_hp, enemy_hp, node_cleared, next_q_id, run_status,
+                    run_over|null}; a missed question comes back as next_q_id later in the same fight
+- GET  /api/report?user_id= -> {subtopics:[... missed_slides], stats}
+- GET  /api/scores?deck_id= -> {scores:[{player_name, score, accuracy, time_s, at}]} (top 10)
 - Node kinds: enemy, miniboss, treasure, blitz, boss. Each node carries its level
   (1 to 5 or summit) so the frontend picks the biome background.
 
