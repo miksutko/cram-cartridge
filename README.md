@@ -179,8 +179,10 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The two demo cartridges work without Snowflake; uploading your own
-lectures needs it.
+Open http://localhost:5173. The two built-in demo cartridges work without Snowflake; uploading your
+own lectures needs it. [`docs/demo/logic-climb.pdf`](docs/demo/logic-climb.pdf) is our own 5-part
+logic crash course: upload it to get a cartridge with all five levels, every boss, the Blitz round and
+both treasure chests.
 
 ## Repository layout
 
