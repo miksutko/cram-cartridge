@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { LINES } from '../game/content'
 import { cleanName } from '../game/settings'
 import { sfx } from '../game/sfx'
@@ -12,6 +12,8 @@ const COLS = 10
 export function NameEntry({ initial, onDone, onBack }: { initial: string; onDone: (name: string) => void; onBack?: () => void }) {
   const [name, setName] = useState(initial)
   const [cur, setCur] = useState(0)
+  // Enter confirms the name after typing; after moving the grid cursor it presses that cell.
+  const typedLast = useRef(false)
 
   const add = (ch: string) => {
     setName((n) => (n.length >= 10 ? n : (n + ch).toUpperCase()))
@@ -27,23 +29,33 @@ export function NameEntry({ initial, onDone, onBack }: { initial: string; onDone
     else if (cell === '⌫') del()
     else add(cell)
   }
-  const move = (d: number) => setCur((c) => (c + d + GRID.length) % GRID.length)
+  const move = (d: number) => {
+    typedLast.current = false
+    setCur((c) => (c + d + GRID.length) % GRID.length)
+  }
+  const typeKey = (ch: string) => {
+    typedLast.current = true
+    add(ch)
+  }
 
   useKeys({
     ArrowLeft: () => move(-1),
     ArrowRight: () => move(1),
     ArrowUp: () => move(-COLS),
     ArrowDown: () => move(COLS),
-    Enter: () => press(GRID[cur]),
-    Backspace: del,
+    Enter: () => (typedLast.current ? done() : press(GRID[cur])),
+    Backspace: () => {
+      typedLast.current = true
+      del()
+    },
     Escape: () => onBack?.(),
   })
   useKeys(
     Object.fromEntries(
-      'abcdefghijklmnopqrstuvwxyz0123456789'.split('').map((k) => [k, () => add(k.toUpperCase())]),
+      'abcdefghijklmnopqrstuvwxyz0123456789'.split('').map((k) => [k, () => typeKey(k.toUpperCase())]),
     ),
   )
-  useKeys({ ' ': () => add(' ') })
+  useKeys({ ' ': () => typeKey(' ') })
 
   return (
     <div className="name-entry">

@@ -2177,3 +2177,15 @@ canvas {
     animation: none !important;
   }
 }
+
+.console.compact {
+  border-radius: 10px 10px 18px 10px;
+}
+
+.console.compact .console-controls {
+  display: none;
+}
+
+.name-entry .hint-line {
+  position: static;
+}

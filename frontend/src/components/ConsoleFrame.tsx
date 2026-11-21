@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { CONSOLE_H, CONSOLE_W, useScale } from './useScale'
+import { COMPACT_H, CONSOLE_H, CONSOLE_W, useScale } from './useScale'
 
 interface Props {
   children: ReactNode
@@ -14,10 +14,11 @@ interface Props {
  * a bevelled bezel, a rune-shaped D-pad and two gem buttons. No real console's shape or name.
  */
 export function ConsoleFrame({ children, slot, powered = true, badges }: Props) {
-  const scale = useScale()
+  const { scale, compact } = useScale()
+  const h = compact ? COMPACT_H : CONSOLE_H
   return (
-    <div className="console-outer" style={{ width: CONSOLE_W * scale, height: CONSOLE_H * scale }}>
-      <div className="console" style={{ transform: `scale(${scale})` }}>
+    <div className="console-outer" style={{ width: CONSOLE_W * scale, height: h * scale }}>
+      <div className={`console ${compact ? 'compact' : ''}`} style={{ transform: `scale(${scale})`, height: h }}>
         <div className="console-slot">
           <div className="console-slot-mouth" />
           <div id="slot-portal" />

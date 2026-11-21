@@ -43,8 +43,24 @@ export interface RunCtx {
 
 const userId = getUserId()
 
+/** Screens that need no run can be opened straight from the hash (e.g. #/manual). */
 function screenFromHash(): Screen {
-  return window.location.hash === '#/gallery' ? { name: 'gallery' } : { name: 'start', attract: true }
+  switch (window.location.hash) {
+    case '#/gallery':
+      return { name: 'gallery' }
+    case '#/start':
+      return { name: 'start' }
+    case '#/name':
+      return { name: 'name', then: 'shelf' }
+    case '#/shelf':
+      return { name: 'shelf' }
+    case '#/manual':
+      return { name: 'manual', back: { name: 'start' } }
+    case '#/settings':
+      return { name: 'settings', back: { name: 'start' } }
+    default:
+      return { name: 'start', attract: true }
+  }
 }
 
 export default function App() {
