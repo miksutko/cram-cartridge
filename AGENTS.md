@@ -63,6 +63,12 @@ assets only; never copy art, characters or names from existing games.
 - POST /api/answer  {user_id, run_id, q_id, choice | text} -> {correct, answer, explanation,
                     taunt, quote|null, player_hp, enemy_hp, node_cleared, next_q_id, run_status,
                     run_over|null}; a missed question comes back as next_q_id later in the same fight
+- POST /api/treasure {run_id, node_id, choice_id} -> {items, hp, max_hp} (clears the chest, opens the next node)
+- POST /api/item   {run_id, item_id, q_id?} -> {items, player_hp, remove? | hint? | shield?}
+                    items: split_rune, sages_whisper, heartstone, aegis_ward
+- Blitz: questions carry time_limit_ms and the fight time_left_ms; when the countdown ends send
+  /api/answer with choice null -> timed_out: true (409 if time is not up). Answers also return
+  score, blocked (Aegis Ward) and time_left_ms.
 - GET  /api/report?user_id= -> {subtopics:[... missed_slides], stats}
 - GET  /api/scores?deck_id= -> {scores:[{player_name, score, accuracy, time_s, at}]} (top 10)
 - Node kinds: enemy, miniboss, treasure, blitz, boss. Each node carries its level

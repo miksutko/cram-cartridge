@@ -1,4 +1,8 @@
-"""Run state for the MVP climb. The server owns all state and timing; the UI only displays it.
+"""Run state for the climb. The server owns all state and timing; the UI only displays it.
+
+Each level (one per subtopic, up to 5): a regular enemy (2 questions), then the mini boss
+(3 questions); a Blitz round (timed) in level 2 and a treasure chest after levels 1 and 3.
+Then the dragon at the summit (8 questions).
 
 Runs, answers and scores are served from memory and written to Snowflake in the background
 (backend/store.py). After a restart they are read back from Snowflake on first use.
@@ -18,33 +22,52 @@ from .ingest import ai_text, clean_math
 from .queries import q
 
 MAX_HP = 7
-MVP_LEVELS = 3
+MAX_LEVELS = 5
+ENEMY_QUESTIONS = 2
 MINIBOSS_QUESTIONS = 3
+BLITZ_QUESTIONS = 4
 BOSS_QUESTIONS = 8
 
+BLITZ_LIMIT_MS = 10_000
+BLITZ_GRACE_S = 2.0  # a late answer within this is still accepted (network, animation)
+AFTER_HIT_S = 1.2  # the client's result screen before the next Blitz question
+AFTER_MISS_S = 8.0  # the client shows the slide quote after a miss
+
+# level -> (biome, mini boss, regular enemy)
 LEVELS = {
-    1: ("Underground", "Minotaur"),
-    2: ("Stormy cave", "Kraken"),
-    3: ("Dead forest", "Forest beast"),
-    4: ("Snowy mountain", "Yeti"),
-    5: ("Volcano", "Phoenix"),
+    1: ("Underground", "Minotaur", "Torchmite"),
+    2: ("Stormy cave", "Hydra", "Brinecrab"),
+    3: ("Dead forest", "Thornhart", "Hollow Crow"),
+    4: ("Snowy mountain", "Yeti", "Frost Imp"),
+    5: ("Volcano", "Phoenix", "Cinder Slug"),
 }
-SUMMIT = ("Cloudy summit", "Dragon")
+SUMMIT = ("Cloudy summit", "Retep")
+TREASURE_AFTER = {1, 3}
+BLITZ_IN = {2}
+
+ITEMS = {
+    "split_rune": ("Split Rune", "Removes two wrong answers"),
+    "sages_whisper": ("Sage's Whisper", "A hint from the slide"),
+    "heartstone": ("Heartstone", "One extra heart"),
+    "aegis_ward": ("Aegis Ward", "Blocks the next hit"),
+}
 
 TAUNTS = {
     "Minotaur": {"miss": ["Lost in the maze of your own notes?", "The labyrinth swallows another student!"],
                  "hit": ["Grrr! A lucky strike.", "My horns... you read that slide."]},
-    "Kraken": {"miss": ["Drowning in detail, are we?", "Eight arms, and you still dropped it!"],
-               "hit": ["Glub! You knew that one.", "The tide turns... for now."]},
-    "Forest beast": {"miss": ["Your knowledge withers like these trees.", "Rotten roots, rotten revision!"],
-                     "hit": ["Snarl! Sharp mind.", "The forest remembers that answer."]},
+    "Hydra": {"miss": ["Cut one question, two more grow back!", "Drowning in detail, are we?"],
+              "hit": ["Hiss! You knew that one.", "The tide turns... for now."]},
+    "Thornhart": {"miss": ["Your knowledge withers like these trees.", "Rotten roots, rotten revision!"],
+                  "hit": ["Snarl! Sharp mind.", "The forest remembers that answer."]},
     "Yeti": {"miss": ["Cold. Very cold.", "Your answer froze solid!"],
              "hit": ["Brrr, that one stung.", "You thawed my defences."]},
     "Phoenix": {"miss": ["Burned!", "Your notes go up in flames!"],
                 "hit": ["I will rise again... after that one.", "Ashes! You got it."]},
-    "Dragon": {"miss": ["I have hoarded that answer for centuries!", "Your revision crumbles at the summit!"],
-               "hit": ["The summit trembles!", "A worthy scholar... but not yet a victor."]},
+    "Retep": {"miss": ["I have hoarded that answer for centuries!", "Your revision crumbles at the summit!"],
+              "hit": ["The summit trembles!", "A worthy scholar... but not yet a victor."]},
 }
+GENERIC_TAUNTS = {"miss": ["Too slow, scholar!", "That one slipped right past you!"],
+                  "hit": ["Ow! You know your slides.", "Eek! Right on target."]}
 
 QUESTION_REWORD_PROMPT = """Reword this quiz question so it tests the same fact with different wording.
 Keep the meaning and the correct answer exactly the same. Reply with only the new question, nothing else.
@@ -61,7 +84,7 @@ class GameError(Exception):
 @dataclass
 class Node:
     node_id: str
-    kind: str  # "miniboss" or "boss"
+    kind: str  # "enemy", "miniboss", "blitz", "treasure" or "boss"
     level: int | str  # 1..5 or "summit"
     biome: str
     enemy: str
@@ -71,7 +94,7 @@ class Node:
 
     def to_dict(self) -> dict:
         return {"node_id": self.node_id, "kind": self.kind, "level": self.level, "biome": self.biome,
-                "enemy": self.enemy, "subtopic": self.subtopic, "status": self.status}
+                "enemy": self.enemy or None, "subtopic": self.subtopic, "status": self.status}
 
 
 @dataclass
@@ -85,12 +108,15 @@ class FightQuestion:
     answer: int
     slot: str | None  # "memory", "other_lecture" or None
     similarity: float | None = None  # cosine score vs the latest miss (other_lecture questions)
+    time_limit_ms: int | None = None  # Blitz questions only
 
     def public(self) -> dict:  # never includes the answer
         data = {"q_id": self.q_id, "prompt": self.prompt, "choices": self.choices,
                 "subtopic": self.subtopic, "deck_name": self.deck_name, "slot": self.slot}
         if self.similarity is not None:
             data["similarity"] = self.similarity
+        if self.time_limit_ms is not None:
+            data["time_limit_ms"] = self.time_limit_ms
         return data
 
 
@@ -102,6 +128,7 @@ class Fight:
     enemy_hp: int
     enemy_max_hp: int
     trace: list[dict]
+    deadline: float | None = None  # Blitz: when time runs out on the current question (epoch s)
 
 
 @dataclass
@@ -122,6 +149,8 @@ class Run:
     misses: list[Question] = field(default_factory=list)
     player_name: str = "PLAYER"
     last_answer: tuple[str, dict] | None = None  # (q_id, response) to replay a duplicate submit
+    items: dict[str, int] = field(default_factory=dict)  # item_id -> count
+    shield: bool = False  # Aegis Ward: the next miss costs no HP
 
     def current_node(self) -> Node | None:
         return next((n for n in self.nodes if n.status == "open"), None)
@@ -180,13 +209,14 @@ def _snapshot(run: Run) -> str:
         "player_name": run.player_name, "nodes": [asdict(n) for n in run.nodes], "hp": run.hp,
         "max_hp": run.max_hp, "status": run.status, "started_at": run.started_at, "ended_at": run.ended_at,
         "answered": run.answered, "correct": run.correct, "used": sorted(run.used),
-        "misses": [m.q_id for m in run.misses],
+        "misses": [m.q_id for m in run.misses], "items": run.items, "shield": run.shield,
         "fight": None if fight is None else {
             "node_id": fight.node.node_id, "queue": fight.queue, "enemy_hp": fight.enemy_hp,
-            "enemy_max_hp": fight.enemy_max_hp, "trace": fight.trace,
+            "enemy_max_hp": fight.enemy_max_hp, "trace": fight.trace, "deadline": fight.deadline,
             "questions": [{"q_id": fq.q_id, "source": fq.source.q_id, "deck_name": fq.deck_name,
                            "subtopic": fq.subtopic, "prompt": fq.prompt, "choices": fq.choices,
-                           "answer": fq.answer, "slot": fq.slot, "similarity": fq.similarity}
+                           "answer": fq.answer, "slot": fq.slot, "similarity": fq.similarity,
+                           "time_limit_ms": fq.time_limit_ms}
                           for fq in fight.questions.values()],
         },
     })
@@ -203,6 +233,7 @@ def _restore(state: dict) -> Run | None:
         answered=state["answered"], correct=state["correct"], used=set(state["used"]),
         misses=[m for m in (_question(x) for x in state["misses"]) if m],
         player_name=state.get("player_name") or "PLAYER",
+        items=dict(state.get("items") or {}), shield=bool(state.get("shield")),
     )
     saved = state.get("fight")
     node = next((n for n in nodes if saved and n.node_id == saved["node_id"]), None)
@@ -214,8 +245,9 @@ def _restore(state: dict) -> Run | None:
                 return run  # the fight cannot be rebuilt; re-entering the node starts a fresh one
             questions[item["q_id"]] = FightQuestion(item["q_id"], source, item["deck_name"], item["subtopic"],
                                                     item["prompt"], item["choices"], item["answer"], item["slot"],
-                                                    item.get("similarity"))
-        run.fight = Fight(node, questions, saved["queue"], saved["enemy_hp"], saved["enemy_max_hp"], saved["trace"])
+                                                    item.get("similarity"), item.get("time_limit_ms"))
+        run.fight = Fight(node, questions, saved["queue"], saved["enemy_hp"], saved["enemy_max_hp"], saved["trace"],
+                          saved.get("deadline"))
     return run
 
 
@@ -245,6 +277,10 @@ def _run(run_id: str, user_id: str | None = None) -> Run:
     return run
 
 
+def _items(run: Run) -> list[dict]:
+    return [{"item_id": k, "name": ITEMS.get(k, (k, ""))[0], "count": n} for k, n in run.items.items() if n > 0]
+
+
 def _map_state(run: Run) -> dict:
     current = run.current_node()
     return {
@@ -254,7 +290,7 @@ def _map_state(run: Run) -> dict:
         "main_topic": run.deck.main_topic,
         "hp": run.hp,
         "max_hp": run.max_hp,
-        "items": [],
+        "items": _items(run),
         "map": [n.to_dict() for n in run.nodes],
         "current_node_id": current.node_id if current else None,
         "run_status": run.status,
@@ -267,13 +303,18 @@ def start_run(user_id: str, deck_id: str, player_name: str | None = None) -> dic
     deck = get_deck(deck_id)
     if deck is None:
         raise GameError(404, "Unknown cartridge")
-    subtopics = deck.playable_subtopics()[:MVP_LEVELS]
+    subtopics = deck.playable_subtopics()[:MAX_LEVELS]
     if not subtopics:
         raise GameError(422, "This cartridge has no playable levels")
-    nodes = [
-        Node(f"n{i + 1}", "miniboss", i + 1, LEVELS[i + 1][0], LEVELS[i + 1][1], s.no, s.name)
-        for i, s in enumerate(subtopics)
-    ]
+    nodes: list[Node] = []
+    for level, s in enumerate(subtopics, start=1):
+        biome, boss, minion = LEVELS[level]
+        nodes.append(Node(f"l{level}-enemy", "enemy", level, biome, minion, s.no, s.name))
+        if level in BLITZ_IN:
+            nodes.append(Node(f"l{level}-blitz", "blitz", level, biome, minion, s.no, s.name))
+        nodes.append(Node(f"l{level}-boss", "miniboss", level, biome, boss, s.no, s.name))
+        if level in TREASURE_AFTER:
+            nodes.append(Node(f"l{level}-chest", "treasure", level, biome, "", s.no, s.name))
     nodes.append(Node("summit", "boss", "summit", SUMMIT[0], SUMMIT[1], None, deck.main_topic))
     nodes[0].status = "open"
     name = (player_name or "").strip()[:20] or "PLAYER"
@@ -405,10 +446,19 @@ def _build_fight(run: Run, node: Node) -> Fight:
         picked.append(_fight_question(node, len(picked), source, from_deck, slot, prompt, similarity))
         run.used.add(source.q_id)
 
-    if node.kind == "miniboss":
+    if node.kind in ("enemy", "miniboss"):
+        count = ENEMY_QUESTIONS if node.kind == "enemy" else MINIBOSS_QUESTIONS
         pool = [x for x in deck.questions if x.subtopic_no == node.subtopic_no]
-        for source in _ranked(pool, history, run.used)[:MINIBOSS_QUESTIONS]:
+        for source in _ranked(pool, history, run.used)[:count]:
             add(source, deck)
+    elif node.kind == "blitz":
+        # Everything climbed so far, weak points first, against the clock.
+        reached = {n.subtopic_no for n in run.nodes if isinstance(n.level, int) and n.level <= node.level}
+        pool = [x for x in deck.questions if x.subtopic_no in reached]
+        for source in _ranked(pool, history, run.used)[:BLITZ_QUESTIONS]:
+            add(source, deck)
+        for fq in picked:
+            fq.time_limit_ms = BLITZ_LIMIT_MS
     else:
         # Slot 1 (memory): a reworded version of the latest mistake on this cartridge.
         by_id = {x.q_id: x for x in deck.questions}
@@ -448,7 +498,8 @@ def _build_fight(run: Run, node: Node) -> Fight:
                     add(pool.pop(0), deck)
 
     questions = {fq.q_id: fq for fq in picked}
-    return Fight(node, questions, list(questions), len(picked), len(picked), trace)
+    deadline = time.time() + BLITZ_LIMIT_MS / 1000 if node.kind == "blitz" else None
+    return Fight(node, questions, list(questions), len(picked), len(picked), trace, deadline)
 
 
 def _fight_state(run: Run) -> dict:
@@ -466,7 +517,38 @@ def _fight_state(run: Run) -> dict:
         "player_hp": run.hp,
         "max_hp": run.max_hp,
         "trace": fight.trace,
+        "time_left_ms": _time_left(fight),
     }
+
+
+def _time_left(fight: Fight) -> int | None:
+    if fight.deadline is None:
+        return None
+    return max(0, min(BLITZ_LIMIT_MS, round((fight.deadline - time.time()) * 1000)))
+
+
+def _treasure(run: Run, node: Node) -> dict:
+    """The chest's three items; the same every time this run opens this chest."""
+    rng = random.Random(f"{run.run_id}:{node.node_id}")
+    offer = rng.sample(sorted(ITEMS), 3)
+    return {
+        "kind": "treasure",
+        "node_id": node.node_id,
+        "level": node.level,
+        "choices": [{"choice_id": f"{node.node_id}.{i}", "item_id": item, "name": ITEMS[item][0],
+                     "desc": ITEMS[item][1]} for i, item in enumerate(offer)],
+        "trace": [],
+    }
+
+
+def _open_next(run: Run, node: Node) -> bool:
+    """Clear a node and open the next one. False when there is none (the run is won)."""
+    node.status = "cleared"
+    following = next((n for n in run.nodes if n.status == "locked"), None)
+    if following:
+        following.status = "open"
+        return True
+    return False
 
 
 def enter_node(run_id: str, node_id: str) -> dict:
@@ -482,6 +564,8 @@ def enter_node(run_id: str, node_id: str) -> dict:
             return _fight_state(run)  # re-entering resumes the same fight
         if node.status != "open":
             raise GameError(409, "That node is not open")
+        if node.kind == "treasure":
+            return _treasure(run, node)
     # Building a boss fight may call Snowflake; do it outside the lock.
     fight = _build_fight(run, node)
     with _lock:
@@ -521,7 +605,7 @@ def _finish(run: Run, status: str) -> dict:
         "time_s": seconds,
         "hp_left": run.hp,
         "weak_spots": [{"subtopic": k, "missed": v} for k, v in sorted(weak.items(), key=lambda kv: -kv[1])],
-        "bosses_beaten": [n.enemy for n in run.nodes if n.status == "cleared"],
+        "bosses_beaten": [n.enemy for n in run.nodes if n.status == "cleared" and n.kind in ("miniboss", "boss")],
     }
 
 
@@ -538,13 +622,25 @@ def answer(user_id: str, run_id: str, q_id: str, choice: int | None) -> dict:
             raise GameError(409, "No fight in progress")
         if not fight.queue or fight.queue[0] != q_id:
             raise GameError(409, "Answer the current question first")
-        if choice is None:
-            raise GameError(400, "Typed answers are not in the MVP; send choice")
         fq = fight.questions[q_id]
-        if not 0 <= choice < len(fq.choices):
+        blitz = fight.node.kind == "blitz"
+        now = time.time()
+        timed_out = False
+        if blitz:  # the server decides when time is up
+            deadline = fight.deadline or now
+            if choice is None:
+                if now < deadline - 1.0:
+                    raise GameError(409, "Time is not up yet")
+                timed_out = True
+            elif now > deadline + BLITZ_GRACE_S:
+                timed_out = True
+        elif choice is None:
+            raise GameError(400, "Typed answers are not supported yet; send choice")
+        if choice is not None and not 0 <= choice < len(fq.choices):
             raise GameError(400, "Choice out of range")
 
-        correct = choice == fq.answer
+        correct = not timed_out and choice == fq.answer
+        blocked = False
         run.answered += 1
         attempt = Attempt(user_id, fq.source.q_id, fq.source.deck_id, fq.deck_name, fq.source.subtopic_no,
                           fq.subtopic, correct, time.time(), fq.source.page, fq.source.quote)
@@ -554,28 +650,33 @@ def answer(user_id: str, run_id: str, q_id: str, choice: int | None) -> dict:
             "subtopic_no": attempt.subtopic_no, "subtopic": attempt.subtopic, "correct": correct,
             "page_no": attempt.page, "quote": attempt.quote, "answered_at": attempt.at})
         fight.queue.pop(0)
-        taunts = TAUNTS[fight.node.enemy]
+        taunts = TAUNTS.get(fight.node.enemy, GENERIC_TAUNTS)
         if correct:
             run.correct += 1
             fight.enemy_hp -= 1
             taunt = random.choice(taunts["hit"])
             quote = None
         else:
-            run.hp -= 1
+            if run.shield:  # Aegis Ward takes the hit
+                run.shield = False
+                blocked = True
+            else:
+                run.hp -= 1
             run.misses.append(fq.source)
-            fight.queue.append(q_id)  # a missed question comes back at the end of the fight
+            if not blitz:
+                fight.queue.append(q_id)  # a missed question comes back at the end of the fight
             taunt = random.choice(taunts["miss"])
             quote = {"text": clean_math(fq.source.quote), "page": fq.source.page, "deck_name": fq.deck_name}
 
-        node_cleared = fight.enemy_hp <= 0
+        # A Blitz round ends when its questions run out; other fights when the enemy is down.
+        node_cleared = not fight.queue if blitz else fight.enemy_hp <= 0
+        if blitz and fight.queue:
+            fight.deadline = now + (AFTER_HIT_S if correct else AFTER_MISS_S) + BLITZ_LIMIT_MS / 1000
         run_over = None
         if run.hp <= 0:
             run_over = _finish(run, "lost")
         elif node_cleared:
-            fight.node.status = "cleared"
-            following = next((n for n in run.nodes if n.status == "locked"), None)
-            if following:
-                following.status = "open"
+            if _open_next(run, fight.node):
                 run.fight = None
             else:
                 run_over = _finish(run, "won")
@@ -593,9 +694,63 @@ def answer(user_id: str, run_id: str, q_id: str, choice: int | None) -> dict:
             "next_q_id": fight.queue[0] if fight.queue and run.status == "active" and not node_cleared else None,
             "run_status": run.status,
             "run_over": run_over,
+            "score": run.correct * 100,
+            "blocked": blocked,
+            "timed_out": timed_out,
+            "time_left_ms": BLITZ_LIMIT_MS if blitz and fight.queue and not node_cleared else None,
         }
         run.last_answer = (q_id, response)
         return response
+
+
+def take_treasure(run_id: str, node_id: str, choice_id: str) -> dict:
+    _ensure_run(run_id)
+    with _lock:
+        run = _run(run_id)
+        node = next((n for n in run.nodes if n.node_id == node_id), None)
+        if run.status != "active" or node is None or node.kind != "treasure" or node.status != "open":
+            raise GameError(409, "That chest is not open")
+        choice = next((c for c in _treasure(run, node)["choices"] if c["choice_id"] == choice_id), None)
+        if choice is None:
+            raise GameError(400, "That item is not in this chest")
+        run.items[choice["item_id"]] = run.items.get(choice["item_id"], 0) + 1
+        _open_next(run, node)  # the summit always follows a chest
+        _save(run)
+        return {"items": _items(run), "hp": run.hp, "max_hp": run.max_hp}
+
+
+def use_item(run_id: str, item_id: str, q_id: str | None) -> dict:
+    _ensure_run(run_id)
+    with _lock:
+        run = _run(run_id)
+        if run.status != "active":
+            raise GameError(409, "This run is over")
+        if run.items.get(item_id, 0) < 1:
+            raise GameError(409, "You do not have that item")
+        extra: dict = {}
+        if item_id in ("split_rune", "sages_whisper"):
+            fight = run.fight
+            if fight is None or not fight.queue or fight.queue[0] != q_id:
+                raise GameError(409, "Use it on the current question")
+            fq = fight.questions[q_id]
+            if item_id == "split_rune":  # hide two wrong choices, never the right one
+                wrong = [i for i in range(len(fq.choices)) if i != fq.answer]
+                extra["remove"] = sorted(random.sample(wrong, min(2, len(wrong))))
+            else:
+                words = clean_math(fq.source.quote).split()
+                nudge = " ".join(words[:max(4, len(words) // 2)])
+                extra["hint"] = (f"Slide {fq.source.page}: " if fq.source.page else "") + f"\u201c{nudge}...\u201d"
+        elif item_id == "heartstone":
+            run.hp += 1
+            run.max_hp = max(run.max_hp, run.hp)
+        elif item_id == "aegis_ward":
+            run.shield = True
+            extra["shield"] = True
+        else:
+            raise GameError(400, "Unknown item")
+        run.items[item_id] -= 1
+        _save(run)
+        return {"items": _items(run), "player_hp": run.hp, **extra}
 
 
 def report(user_id: str) -> dict:

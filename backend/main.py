@@ -36,6 +36,18 @@ class NodeRequest(BaseModel):
     node_id: str
 
 
+class TreasureRequest(BaseModel):
+    run_id: str
+    node_id: str
+    choice_id: str
+
+
+class ItemRequest(BaseModel):
+    run_id: str
+    item_id: str
+    q_id: str | None = None
+
+
 class AnswerRequest(BaseModel):
     user_id: str
     run_id: str
@@ -106,6 +118,16 @@ def node(body: NodeRequest) -> dict[str, Any]:
 @app.post("/api/answer")
 def answer(body: AnswerRequest) -> dict[str, Any]:
     return _game(game.answer, body.user_id, body.run_id, body.q_id, body.choice)
+
+
+@app.post("/api/treasure")
+def treasure(body: TreasureRequest) -> dict[str, Any]:
+    return _game(game.take_treasure, body.run_id, body.node_id, body.choice_id)
+
+
+@app.post("/api/item")
+def item(body: ItemRequest) -> dict[str, Any]:
+    return _game(game.use_item, body.run_id, body.item_id, body.q_id)
 
 
 @app.get("/api/report")

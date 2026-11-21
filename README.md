@@ -55,16 +55,24 @@ Your uploaded lectures sit next to two built-in demo cartridges.
 
 ### 3. Climb the mountain
 
-One level per subtopic, each a biome with its own mini boss, and the dragon at the summit.
+One level per subtopic (up to five), each a biome with a regular enemy and then its boss, and the
+dragon at the summit. Level 2 adds a timed Blitz round, and treasure chests wait after levels 1 and 3.
 
-| Level | Biome | Boss |
-|---|---|---|
-| 1 | Underground | Minotaur |
-| 2 | Stormy cave | Hydra |
-| 3 | Dead forest | Thornhart |
-| Summit | Cloudy summit | Retep, the dragon |
+| Level | Biome | Enemy | Boss |
+|---|---|---|---|
+| 1 | Underground | Torchmite | Minotaur |
+| 2 | Stormy cave | Brinecrab | Hydra |
+| 3 | Dead forest | Hollow Crow | Thornhart |
+| 4 | Snowy mountain | Frost Imp | Yeti |
+| 5 | Volcano | Cinder Slug | Phoenix |
+| Summit | Cloudy summit | | Retep, the dragon |
 
 <p align="center"><img src="docs/img/map.png" alt="The mountain map" width="75%"></p>
+
+| | |
+|---|---|
+| <img src="docs/img/treasure.png" alt="A treasure chest"> | <img src="docs/img/blitz.png" alt="A Blitz round"> |
+| Treasure: Split Rune hides two wrong answers, Sage's Whisper gives a hint from the slide, Heartstone adds a heart, Aegis Ward blocks a hit | Blitz: four quick questions, ten seconds each, timed by the server |
 
 ### 4. Every attack is a question from your slides
 
@@ -185,8 +193,7 @@ docs/img/   screenshots for this README
 
 ## What's next
 
-- Treasure rooms and power-ups, Blitz rounds and typed answers (the screens exist; the backend comes next)
-- Regular enemies on each level, and levels 4 and 5 (Snowy mountain with the Yeti, Volcano with the Phoenix)
+- Typed answers for the bosses (the screen exists; the backend comes next)
 - Branching paths picked by how well you are doing
 
 ## Team
