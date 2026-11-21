@@ -19,9 +19,25 @@
 </p>
 
 <p align="center">
-  <b>Built with JetBrains Air (Claude Code and Junie agents)</b><br>
-  🎬 <a href="#">Demo video</a> (coming soon)
+  <b>Built with JetBrains Air (Claude Code and Junie agents)</b>
 </p>
+
+## 🎬 30-second demo
+
+<p align="center">
+  <a href="docs/video/cram-cartridge-demo.mp4">
+    <img src="docs/video/cram-cartridge-demo.gif" alt="30-second demo of Cram Cartridge: upload, climb, miss a question, the boss quotes the slide, the dragon, results" width="85%">
+  </a><br>
+  <a href="docs/video/cram-cartridge-demo.mp4"><b>▶ Watch with sound (MP4, 30 s)</b></a>
+  · recorded straight from the app, music is the game's own chiptune
+</p>
+
+| For judges | In one line |
+|---|---|
+| **Impact** | Every student with lecture slides and an exam: rereading feels productive, testing yourself is what makes it stick. |
+| **Tech** | All the AI runs inside Snowflake: `AI_PARSE_DOCUMENT` → `SPLIT_TEXT_RECURSIVE_CHARACTER` → `AI_EMBED` → `AI_COMPLETE`, and the dragon finds your weak spots with `VECTOR_COSINE_SIMILARITY`. |
+| **Design** | A handheld you already know how to play: original pixel art and chiptune, all drawn and synthesised in code. |
+| **Creativity** | A wrong answer isn't just red: the boss quotes the exact slide you missed, and the final boss remembers your mistakes. |
 
 ---
 
@@ -114,8 +130,10 @@ Climb again and those weak spots come first.
 All game art (sprites, backgrounds, icons, the console frame) is original and drawn in code in
 [`frontend/src/art/`](frontend/src/art); nothing is copied from existing games. A designer can
 replace any sprite by dropping `frontend/src/assets/sprites/<id>.png` (see the `#/gallery` page in
-the running game). Music goes in `frontend/src/assets/music/` by slot name and plays through a retro
-filter; every track must be licensed for this use and credited here.
+the running game). The music is original too: seven chiptune themes (title, five biomes, the summit)
+plus the dragon, victory and defeat, written in [`frontend/src/game/songs.ts`](frontend/src/game/songs.ts)
+and synthesised live in the browser with Web Audio (pulse lead, triangle bass, noise drums). No audio
+files, nothing licensed.
 
 ## Powered by Snowflake
 

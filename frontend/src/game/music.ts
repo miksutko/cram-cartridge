@@ -187,6 +187,7 @@ function stop(p: Playing, a: AudioContext): void {
 }
 
 function start(slot: MusicSlot): void {
+  if (settings.get().music <= 0) return // music off: never even start the audio engine
   const a = audio()
   if (!a) return
   if (a.state === 'suspended') void a.resume()
@@ -248,8 +249,10 @@ export function unlockMusic(): void {
 }
 
 settings.subscribe(() => {
+  if (settings.get().music > 0 && unlocked && wanted && !current) start(wanted)
+  if (!master) return
   const a = audio()
-  if (master && a) master.gain.setTargetAtTime(volume(), a.currentTime, 0.05)
+  if (a) master.gain.setTargetAtTime(volume(), a.currentTime, 0.05)
 })
 
 /** For tests: what is playing right now. */
