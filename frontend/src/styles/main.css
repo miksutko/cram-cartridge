@@ -2217,3 +2217,11 @@ canvas {
   gap: 2px 6px;
   color: var(--dim);
 }
+
+.fighter {
+  bottom: 64px;
+}
+
+.fighter.enemy.dragon {
+  bottom: 60px;
+}

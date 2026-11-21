@@ -21,6 +21,7 @@ interface Props {
 }
 
 const LOCAL_SCORES = 'cram-scores'
+const recordedRuns = new Set<string>()
 const PAGES = ['RESULTS', 'HIGH SCORES', 'WEAK SPOTS', "ADVENTURER'S LEDGER"]
 const pct = (x: number) => `${Math.round(x * 100)}%`
 const LEVEL_IDS: BiomeId[] = ['l1', 'l2', 'l3', 'l4', 'l5']
@@ -40,13 +41,15 @@ export function ResultsScreen({ userId, run, result, onReplay, onShelf }: Props)
   const [report, setReport] = useState<Report | null>(null)
   const [scores, setScores] = useState<{ rows: ScoreRow[]; local: boolean } | null>(null)
 
-  // Record this run locally (fallback high scores and the shelf's best score).
+  // Record this run locally (fallback high scores and the shelf's best score), once per run.
   const [recorded] = useState(() => {
+    const row: ScoreRow = { player_name: playerName(), score: result.score, accuracy: result.accuracy, time_s: result.time_s, at: run.started }
+    if (recordedRuns.has(run.runId)) return row
+    recordedRuns.add(run.runId)
     const bests = load<Record<string, number>>(BESTS, {})
     bests[run.deck.deck_id] = Math.max(bests[run.deck.deck_id] ?? 0, result.score)
     save(BESTS, bests)
     const all = load<Record<string, ScoreRow[]>>(LOCAL_SCORES, {})
-    const row: ScoreRow = { player_name: playerName(), score: result.score, accuracy: result.accuracy, time_s: result.time_s, at: Date.now() }
     all[run.deck.deck_id] = [...(all[run.deck.deck_id] ?? []), row].sort((a, b) => b.score - a.score).slice(0, 10)
     save(LOCAL_SCORES, all)
     return row
@@ -132,7 +135,7 @@ function Scores({ rows, local, mine }: { rows: ScoreRow[]; local: boolean; mine:
     <PixelBox className="scores">
       <ol>
         {rows.slice(0, 8).map((r, i) => (
-          <li key={`${r.player_name}-${r.score}-${r.at ?? i}`} className={r.at === mine.at && r.score === mine.score ? 'me' : ''}>
+          <li key={i} className={r.at === mine.at && r.score === mine.score ? 'me' : ''}>
             <span className="rank">{i + 1}.</span>
             <span className="who">{r.player_name}</span>
             <span className="pts">{r.score}</span>
