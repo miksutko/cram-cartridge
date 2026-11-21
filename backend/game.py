@@ -9,6 +9,7 @@ import random
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 
 from . import db, store
@@ -16,7 +17,7 @@ from .decks import Deck, Question, get_deck, list_decks
 from .ingest import ai_text, clean_math
 from .queries import q
 
-MAX_HP = 5
+MAX_HP = 7
 MVP_LEVELS = 3
 MINIBOSS_QUESTIONS = 3
 BOSS_QUESTIONS = 8
@@ -83,10 +84,14 @@ class FightQuestion:
     choices: list[str]
     answer: int
     slot: str | None  # "memory", "other_lecture" or None
+    similarity: float | None = None  # cosine score vs the latest miss (other_lecture questions)
 
     def public(self) -> dict:  # never includes the answer
-        return {"q_id": self.q_id, "prompt": self.prompt, "choices": self.choices,
+        data = {"q_id": self.q_id, "prompt": self.prompt, "choices": self.choices,
                 "subtopic": self.subtopic, "deck_name": self.deck_name, "slot": self.slot}
+        if self.similarity is not None:
+            data["similarity"] = self.similarity
+        return data
 
 
 @dataclass
@@ -181,7 +186,8 @@ def _snapshot(run: Run) -> str:
             "enemy_max_hp": fight.enemy_max_hp, "trace": fight.trace,
             "questions": [{"q_id": fq.q_id, "source": fq.source.q_id, "deck_name": fq.deck_name,
                            "subtopic": fq.subtopic, "prompt": fq.prompt, "choices": fq.choices,
-                           "answer": fq.answer, "slot": fq.slot} for fq in fight.questions.values()],
+                           "answer": fq.answer, "slot": fq.slot, "similarity": fq.similarity}
+                          for fq in fight.questions.values()],
         },
     })
 
@@ -207,7 +213,8 @@ def _restore(state: dict) -> Run | None:
             if source is None:
                 return run  # the fight cannot be rebuilt; re-entering the node starts a fresh one
             questions[item["q_id"]] = FightQuestion(item["q_id"], source, item["deck_name"], item["subtopic"],
-                                                    item["prompt"], item["choices"], item["answer"], item["slot"])
+                                                    item["prompt"], item["choices"], item["answer"], item["slot"],
+                                                    item.get("similarity"))
         run.fight = Fight(node, questions, saved["queue"], saved["enemy_hp"], saved["enemy_max_hp"], saved["trace"])
     return run
 
@@ -292,18 +299,21 @@ def _history(user_id: str) -> dict[str, int]:
     return misses
 
 
-def _ranked(questions: list[Question], history: dict[str, int], used: set[str]) -> list[Question]:
-    """Weak points (ever missed, most misses first), then unseen, then known.
-    Questions already used this run go last."""
-    def rank(x: Question) -> tuple[bool, int, int, float]:
+def _ranked(questions: list[Question], history: dict[str, int], used: set[str],
+            near: dict[str, float] | None = None) -> list[Question]:
+    """Weak points (ever missed, most misses first), then unseen, then known; within a group,
+    the questions closest to the latest miss come first. Questions used this run go last."""
+    near = near or {}
+
+    def rank(x: Question) -> tuple[bool, int, int, float, float]:
         misses = history.get(x.q_id)
         group = 1 if misses is None else 0 if misses else 2
-        return (x.q_id in used, group, -(misses or 0), random.random())
+        return (x.q_id in used, group, -(misses or 0), -near.get(x.q_id, 0.0), random.random())
     return sorted(questions, key=rank)
 
 
-def _fight_question(node: Node, i: int, source: Question, deck: Deck,
-                    slot: str | None = None, prompt: str | None = None) -> FightQuestion:
+def _fight_question(node: Node, i: int, source: Question, deck: Deck, slot: str | None = None,
+                    prompt: str | None = None, similarity: float | None = None) -> FightQuestion:
     order = random.sample(range(len(source.choices)), len(source.choices))
     return FightQuestion(
         q_id=f"{node.node_id}.{i}",
@@ -314,6 +324,7 @@ def _fight_question(node: Node, i: int, source: Question, deck: Deck,
         choices=[clean_math(source.choices[j]) for j in order],
         answer=order.index(source.answer),
         slot=slot,
+        similarity=similarity,
     )
 
 
@@ -322,7 +333,7 @@ def _reword(question: Question, trace: list[dict]) -> str | None:
         return None
     start = time.perf_counter()
     try:
-        with db.get_connection() as conn, conn.cursor() as cur:
+        with db.pooled() as conn, conn.cursor() as cur:
             cur.execute(q("complete"), {"prompt": QUESTION_REWORD_PROMPT + question.prompt})
             reply = ai_text((cur.fetchone() or [""])[0]).strip().strip('"')
         trace.append({"fn": "AI_COMPLETE (reword)", "ms": round((time.perf_counter() - start) * 1000), "rows": 1})
@@ -331,6 +342,40 @@ def _reword(question: Question, trace: list[dict]) -> str | None:
         trace.append({"fn": "AI_COMPLETE (reword)", "ms": round((time.perf_counter() - start) * 1000),
                       "rows": 0, "error": str(exc)[:200]})
         return None
+
+
+def _cosine_matches(deck: Deck, anchor: Question, trace: list[dict]) -> tuple[list[tuple[Deck, Question, float]], dict[str, float]]:
+    """VECTOR_COSINE_SIMILARITY in Snowflake between the anchor (the latest miss) and every question.
+    Returns the 2 closest questions from other lectures, and this cartridge's scores by q_id."""
+    if not db.configured() or anchor.deck_id.startswith("demo-"):
+        return [], {}
+    anchor_deck, q_no = anchor.q_id.rsplit(":", 1)
+    start = time.perf_counter()
+    rows = store.read("similar_questions", {"anchor_deck": anchor_deck, "anchor_q_no": int(q_no)})
+    near = {f"{d}:{n}": float(score) for d, n, score in rows if d == deck.deck_id}
+    picked: list[tuple[Deck, Question, float]] = []
+    seen = {anchor.prompt.strip().lower()}
+    for deck_id, other_no, score in rows:
+        if deck_id == deck.deck_id or float(score) >= 0.98:  # same lecture, or a re-uploaded copy
+            continue
+        other = get_deck(deck_id)
+        source = next((x for x in other.questions if x.q_id == f"{deck_id}:{other_no}"), None) if other else None
+        if source is None or source.prompt.strip().lower() in seen:
+            continue
+        seen.add(source.prompt.strip().lower())
+        picked.append((other, source, round(float(score), 3)))
+        if len(picked) == 2:
+            break
+    trace.append({
+        "fn": "VECTOR_COSINE_SIMILARITY (dragon)",
+        "ms": round((time.perf_counter() - start) * 1000),
+        "rows": len(rows),
+        "detail": {
+            "anchor": clean_math(anchor.prompt),
+            "matches": [{"deck_name": o.name, "prompt": clean_math(x.prompt), "score": sc} for o, x, sc in picked],
+        },
+    })
+    return picked, near
 
 
 def _other_deck(deck: Deck) -> Deck | None:
@@ -355,8 +400,9 @@ def _build_fight(run: Run, node: Node) -> Fight:
     trace: list[dict] = []
     picked: list[FightQuestion] = []
 
-    def add(source: Question, from_deck: Deck, slot: str | None = None, prompt: str | None = None) -> None:
-        picked.append(_fight_question(node, len(picked), source, from_deck, slot, prompt))
+    def add(source: Question, from_deck: Deck, slot: str | None = None, prompt: str | None = None,
+            similarity: float | None = None) -> None:
+        picked.append(_fight_question(node, len(picked), source, from_deck, slot, prompt, similarity))
         run.used.add(source.q_id)
 
     if node.kind == "miniboss":
@@ -370,16 +416,30 @@ def _build_fight(run: Run, node: Node) -> Fight:
         if latest is None:
             latest = next((by_id[a.q_id] for a in reversed(_attempts)
                            if a.user_id == run.user_id and not a.correct and a.q_id in by_id), None)
+        # Slots 2-3 (other lecture): the questions in other lectures closest to the latest miss
+        # (or, with no miss yet, to this cartridge's weakest question), by cosine similarity.
+        # The reword and the cosine match are separate Snowflake calls, so run them together.
+        anchor = latest or next(iter(_ranked(list(deck.questions), history, set())), None)
+        reword_trace: list[dict] = []
+        cosine_trace: list[dict] = []
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            reworded = pool.submit(_reword, latest, reword_trace) if latest else None
+            cosine = pool.submit(_cosine_matches, deck, anchor, cosine_trace) if anchor else None
+            reworded_prompt = reworded.result() if reworded else None
+            matches, near = cosine.result() if cosine else ([], {})
+        trace.extend(reword_trace + cosine_trace)
         if latest:
-            add(latest, deck, "memory", _reword(latest, trace))
-        # Slots 2-3 (other lecture): questions from a different cartridge.
-        other = _other_deck(deck)
-        if other:
-            for source in _ranked(list(other.questions), history, run.used)[:2]:
-                add(source, other, "other_lecture")
-        # The rest: the whole topic, one subtopic at a time, weak points first.
+            add(latest, deck, "memory", reworded_prompt)
+        for other, source, score in matches:
+            add(source, other, "other_lecture", similarity=score)
+        if not matches:  # demo cartridges, or Snowflake unavailable
+            other = _other_deck(deck)
+            if other:
+                for source in _ranked(list(other.questions), history, run.used)[:2]:
+                    add(source, other, "other_lecture")
+        # The rest: the whole topic, one subtopic at a time, weak points (then near the miss) first.
         by_subtopic = {}
-        for x in _ranked(list(deck.questions), history, run.used):
+        for x in _ranked(list(deck.questions), history, run.used, near):
             if x.q_id not in {p.source.q_id for p in picked}:
                 by_subtopic.setdefault(x.subtopic_no, []).append(x)
         while len(picked) < BOSS_QUESTIONS and any(by_subtopic.values()):

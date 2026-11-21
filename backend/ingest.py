@@ -369,6 +369,7 @@ def ingest(pdf: bytes, name: str) -> dict:
             if not any(count >= MIN_QUESTIONS for count in by_subtopic.values()):
                 raise UploadError("AI_COMPLETE did not return enough usable questions")
             trace.run(cur, "INSERT questions", q("insert_question"), question_rows, many=True)
+            trace.run(cur, "AI_EMBED (questions)", q("embed_questions"), params)
 
             cur.execute(q("subtopic_chunk_counts"), params)
             chunks_per_subtopic = {int(no): int(n) for no, n in cur.fetchall() if no is not None}

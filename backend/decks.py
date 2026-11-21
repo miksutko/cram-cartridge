@@ -99,7 +99,7 @@ def list_decks() -> tuple[list[dict], str | None]:
     if not db.configured():
         return decks, "Snowflake is not configured (.env)"
     try:
-        with db.get_connection() as conn:
+        with db.pooled() as conn:
             db.ensure_schema(conn)
             with conn.cursor() as cur:
                 cur.execute(q("list_decks"))
@@ -132,7 +132,7 @@ def get_deck(deck_id: str) -> Deck | None:
 
 def _load_snowflake_deck(deck_id: str) -> Deck | None:
     params = {"deck_id": deck_id}
-    with db.get_connection() as conn, conn.cursor() as cur:
+    with db.pooled() as conn, conn.cursor() as cur:
         cur.execute(q("deck_info"), params)
         info = cur.fetchone()
         if not info:
@@ -157,6 +157,17 @@ def _load_snowflake_deck(deck_id: str) -> Deck | None:
         for q_no, sub, prompt, choices_json, answer, explanation, page, quote in rows
     )
     return Deck(deck_id, name, main_topic or name, "snowflake", subtopics, questions, slides or 0, chunks or 0)
+
+
+def warm_cache() -> None:
+    """Load every uploaded cartridge into memory (run in the background at startup)."""
+    summaries, _ = list_decks()
+    for summary in summaries:
+        if summary["source"] == "snowflake":
+            try:
+                get_deck(summary["deck_id"])
+            except Exception:
+                pass
 
 
 def remember(deck: Deck) -> None:

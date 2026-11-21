@@ -173,3 +173,24 @@ WHEN NOT MATCHED THEN INSERT (run_id, user_id, deck_id, state_json)
 
 -- name: load_run
 SELECT state_json FROM runs WHERE run_id = %(run_id)s;
+
+-- name: embed_questions
+-- One vector per question (prompt + correct answer) for the dragon's cosine match.
+UPDATE questions
+SET embedding = AI_EMBED('snowflake-arctic-embed-l-v2.0',
+                         prompt || ' ' || COALESCE(GET(PARSE_JSON(choices_json), answer_index)::STRING, ''))
+WHERE deck_id = %(deck_id)s AND embedding IS NULL;
+
+-- name: similar_questions
+-- Every question on a ready cartridge, ranked by closeness to the anchor (the latest miss).
+SELECT q.deck_id, q.q_no, VECTOR_COSINE_SIMILARITY(q.embedding, a.embedding) AS score
+FROM questions a
+CROSS JOIN questions q
+JOIN decks d ON d.deck_id = q.deck_id
+WHERE a.deck_id = %(anchor_deck)s AND a.q_no = %(anchor_q_no)s
+  AND a.embedding IS NOT NULL AND q.embedding IS NOT NULL AND d.status = 'ready'
+ORDER BY score DESC
+LIMIT 60;
+
+-- name: ready_deck_ids
+SELECT deck_id FROM decks WHERE status = 'ready';

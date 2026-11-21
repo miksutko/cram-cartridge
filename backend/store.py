@@ -68,12 +68,13 @@ def read(query_name: str, params: dict[str, Any]) -> list[tuple]:
     """Run a read query; returns [] when Snowflake is not configured or fails."""
     if not db.configured():
         return []
-    try:
-        with db.get_connection() as conn:
-            db.ensure_schema(conn)
-            with conn.cursor() as cur:
-                cur.execute(q(query_name), params)
-                return list(cur.fetchall())
-    except Exception as exc:
-        logger.warning("Snowflake read %s failed: %s", query_name, exc)
-        return []
+    for attempt in (1, 2):  # a pooled connection may have expired: retry once on a new one
+        try:
+            with db.pooled() as conn:
+                db.ensure_schema(conn)
+                with conn.cursor() as cur:
+                    cur.execute(q(query_name), params)
+                    return list(cur.fetchall())
+        except Exception as exc:
+            logger.warning("Snowflake read %s failed (try %d): %s", query_name, attempt, exc)
+    return []

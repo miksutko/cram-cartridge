@@ -91,3 +91,6 @@ CREATE TABLE IF NOT EXISTS runs (
   state_json STRING NOT NULL,
   updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
 );
+
+-- One vector per question, so the dragon can pick questions close to your latest miss.
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS embedding VECTOR(FLOAT, 1024);

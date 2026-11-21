@@ -1,4 +1,5 @@
 import logging
+import threading
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -6,13 +7,15 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from . import db, game, store
-from .decks import list_decks
+from .decks import list_decks, warm_cache
 from .ingest import MAX_PDF_BYTES, UploadError, ingest
 
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    if db.configured():  # load the uploaded cartridges in the background so first fights are quick
+        threading.Thread(target=warm_cache, name="warm-decks", daemon=True).start()
     yield
     # Stopping or reloading the server: let queued game writes reach Snowflake first.
     if not store.flush(15):

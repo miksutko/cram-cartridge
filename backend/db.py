@@ -1,5 +1,7 @@
 import os
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import snowflake.connector
@@ -19,6 +21,8 @@ _OPTIONAL = {
 
 _schema_lock = threading.Lock()
 _schema_ready = False
+_pool: list[snowflake.connector.SnowflakeConnection] = []
+_pool_lock = threading.Lock()
 
 
 def configured() -> bool:
@@ -40,6 +44,31 @@ def get_connection() -> snowflake.connector.SnowflakeConnection:
         validate_default_parameters=True,
         **optional,
     )
+
+
+@contextmanager
+def pooled() -> Iterator[snowflake.connector.SnowflakeConnection]:
+    """An open connection reused across game requests (a fresh login costs 1-2 s).
+    A connection that raised is closed instead of going back to the pool."""
+    with _pool_lock:
+        conn = _pool.pop() if _pool else None
+    if conn is None or conn.is_closed():
+        conn = get_connection()
+    healthy = False
+    try:
+        yield conn
+        healthy = True
+    finally:
+        if healthy and not conn.is_closed():
+            with _pool_lock:
+                if len(_pool) < 4:
+                    _pool.append(conn)
+                    conn = None
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def ensure_schema(conn: snowflake.connector.SnowflakeConnection) -> None:
