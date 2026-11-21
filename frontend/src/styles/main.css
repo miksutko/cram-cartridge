@@ -2968,3 +2968,54 @@ body,
 .treasure .chest {
   bottom: 80px;
 }
+
+/* STATS screen (main menu): reuses the results styles; two columns of panels. */
+.stats-grid {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.stats-grid > .weak {
+  flex: 1;
+  min-width: 0;
+}
+
+.stats-head {
+  font-size: 4.5px;
+  color: var(--gold);
+  margin: 2px 0;
+}
+
+.stats-quote {
+  font-size: 4px;
+  line-height: 1.3;
+}
+
+.stats-cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px 6px;
+  font-size: 4px;
+  color: var(--dim);
+}
+
+.stats-note {
+  font-size: 5px;
+  text-align: center;
+}
+
+.stats-screen .stats {
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.stats-grid.stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.stats-grid.stack .stats div {
+  font-size: 4px;
+}

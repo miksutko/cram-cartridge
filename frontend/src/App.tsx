@@ -17,6 +17,7 @@ import { ResultsScreen } from './screens/ResultsScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { ShelfScreen } from './screens/ShelfScreen'
 import { StartScreen } from './screens/StartScreen'
+import { StatsScreen } from './screens/StatsScreen'
 import { NameScreen } from './screens/NameScreen'
 
 export type Screen =
@@ -29,6 +30,7 @@ export type Screen =
   | { name: 'manual'; back: Screen }
   | { name: 'settings'; back: Screen }
   | { name: 'gallery' }
+  | { name: 'stats' }
 
 /** What the client remembers about the current run (the server owns the real state). */
 export interface RunCtx {
@@ -108,7 +110,7 @@ export default function App() {
 
   useEffect(() => {
     const slot =
-      screen.name === 'start' || screen.name === 'name' || screen.name === 'manual' || screen.name === 'settings'
+      screen.name === 'start' || screen.name === 'name' || screen.name === 'manual' || screen.name === 'settings' || screen.name === 'stats'
         ? 'title'
         : screen.name === 'shelf'
           ? 'shelf'
@@ -162,6 +164,7 @@ export default function App() {
             onStart={startPressed}
             onManual={() => go({ name: 'manual', back: { name: 'start' } })}
             onSettings={() => go({ name: 'settings', back: { name: 'start' } })}
+            onStats={() => go({ name: 'stats' })}
           />
         )
         break
@@ -206,6 +209,9 @@ export default function App() {
         break
       case 'manual':
         body = <Manual onBack={() => go(screen.back)} />
+        break
+      case 'stats':
+        body = <StatsScreen userId={userId} onBack={() => go({ name: 'start' })} />
         break
       case 'settings':
         body = <SettingsScreen onBack={() => go(screen.back)} onChangeName={() => go({ name: 'name', then: 'settings' })} />

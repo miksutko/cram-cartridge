@@ -225,6 +225,33 @@ export interface ScoreRow {
   at?: number
 }
 
+export interface StatsResponse {
+  you: Report
+  built: {
+    cartridges: number
+    pages: number
+    chunks: number
+    chunk_vectors: number
+    questions: number
+    question_vectors: number
+    answers_saved: number
+    runs_finished: number
+  }
+  ai_calls_24h: { parse_document: number; complete: number; embed: number; cosine: number; all_queries: number }
+  cartridges: {
+    name: string
+    main_topic: string
+    slides: number
+    levels: number
+    questions: number
+    plays: number
+    best_score: number | null
+    answers: number
+    accuracy: number | null
+  }[]
+  connected: boolean
+}
+
 export interface ScoresResponse {
   scores: ScoreRow[]
 }

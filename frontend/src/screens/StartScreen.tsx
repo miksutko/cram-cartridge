@@ -14,6 +14,7 @@ interface Props {
   onStart: () => void
   onManual: () => void
   onSettings: () => void
+  onStats: () => void
 }
 
 const SLIDE = 'Big-O: the cost of an algorithm as input grows'
@@ -109,13 +110,14 @@ function Attract({ onEnd }: { onEnd: () => void }) {
   )
 }
 
-export function StartScreen({ attract, onStart, onManual, onSettings }: Props) {
+export function StartScreen({ attract, onStart, onManual, onSettings, onStats }: Props) {
   const [showAttract, setShowAttract] = useState(attract && !prefersReducedMotion())
   const typed = useRef('')
   const [devFlash, setDevFlash] = useState(false)
   const items = [
     { label: 'START', run: onStart },
     { label: 'HOW TO PLAY', run: onManual },
+    { label: 'STATS', run: onStats },
     { label: 'SETTINGS', run: onSettings },
   ]
   const [sel, setSel] = useMenu(

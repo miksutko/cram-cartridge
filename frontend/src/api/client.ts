@@ -10,6 +10,7 @@ import type {
   Report,
   RunMap,
   ScoresResponse,
+  StatsResponse,
   TraceStep,
   TreasureResult,
   UploadResult,
@@ -39,6 +40,7 @@ export interface Backend {
   treasure(runId: string, nodeId: string, choiceId: string): Promise<TreasureResult>
   useItem(runId: string, itemId: string, qId: string | null): Promise<ItemResult>
   scores(deckId: string): Promise<ScoresResponse>
+  stats(userId: string): Promise<StatsResponse>
 }
 
 function record(path: string, body: unknown): void {
@@ -99,6 +101,7 @@ export const realBackend: Backend = {
     post<TreasureResult>('/api/treasure', { run_id: runId, node_id: nodeId, choice_id: choiceId }, true),
   useItem: (runId, itemId, qId) => post<ItemResult>('/api/item', { run_id: runId, item_id: itemId, q_id: qId }, true),
   scores: (deckId) => request<ScoresResponse>(`/api/scores?deck_id=${q(deckId)}`, undefined, true),
+  stats: (userId) => request<StatsResponse>(`/api/stats?user_id=${q(userId)}`, undefined, true),
 }
 
 export type BackendMode = 'checking' | 'real' | 'mock'

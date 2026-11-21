@@ -455,6 +455,16 @@ export const mockBackend: Backend = {
     await delay(50)
     return { ok: true, snowflake: false, error: 'mock backend' }
   },
+  async stats(userId: string) {
+    const you = await this.report(userId)
+    return {
+      you,
+      built: { cartridges: decks.length, pages: 0, chunks: 0, chunk_vectors: 0, questions: 0, question_vectors: 0, answers_saved: you.stats.answered, runs_finished: you.stats.runs_finished },
+      ai_calls_24h: { parse_document: 0, complete: 0, embed: 0, cosine: 0, all_queries: 0 },
+      cartridges: [],
+      connected: false,
+    }
+  },
   async deleteDeck(deckId: string) {
     const i = decks.findIndex((d) => d.deck_id === deckId)
     if (i >= 0) decks.splice(i, 1)

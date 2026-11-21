@@ -198,3 +198,38 @@ SELECT deck_id FROM decks WHERE status = 'ready';
 -- name: hide_deck
 -- Taking a cartridge off the shelf keeps its rows (status 'deleted'), so it can be restored.
 UPDATE decks SET status = 'deleted' WHERE deck_id = %(deck_id)s AND status = 'ready';
+
+-- name: stats_built
+SELECT (SELECT COUNT(*) FROM decks WHERE status = 'ready') AS cartridges,
+       (SELECT COUNT(*) FROM slides s JOIN decks d ON d.deck_id = s.deck_id WHERE d.status = 'ready') AS pages,
+       (SELECT COUNT(*) FROM chunks c JOIN decks d ON d.deck_id = c.deck_id WHERE d.status = 'ready') AS chunks,
+       (SELECT COUNT(c.embedding) FROM chunks c JOIN decks d ON d.deck_id = c.deck_id WHERE d.status = 'ready') AS chunk_vectors,
+       (SELECT COUNT(*) FROM questions q JOIN decks d ON d.deck_id = q.deck_id WHERE d.status = 'ready') AS questions,
+       (SELECT COUNT(q.embedding) FROM questions q JOIN decks d ON d.deck_id = q.deck_id WHERE d.status = 'ready') AS question_vectors,
+       (SELECT COUNT(*) FROM attempts) AS answers_saved,
+       (SELECT COUNT(*) FROM scores) AS runs_finished;
+
+-- name: stats_ai_calls
+-- The game's Snowflake AI calls in the last 24 hours (live query history). The doubled percent
+-- signs are literal LIKE wildcards once the connector formats the statement.
+SELECT COUNT_IF(query_text ILIKE '%%AI_PARSE_DOCUMENT%%') AS parse_document,
+       COUNT_IF(query_text ILIKE '%%AI_COMPLETE%%') AS complete,
+       COUNT_IF(query_text ILIKE '%%AI_EMBED%%') AS embed,
+       COUNT_IF(query_text ILIKE '%%VECTOR_COSINE_SIMILARITY%%') AS cosine,
+       COUNT(*) AS all_queries
+FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY(
+  END_TIME_RANGE_START => DATEADD('hour', -24, CURRENT_TIMESTAMP()), RESULT_LIMIT => 10000))
+WHERE query_text NOT ILIKE '%%QUERY_HISTORY%%';
+
+-- name: stats_cartridges
+WITH qs AS (SELECT deck_id, COUNT(*) AS n, COUNT(DISTINCT subtopic_no) AS levels FROM questions GROUP BY deck_id),
+     sc AS (SELECT deck_id, COUNT(*) AS plays, MAX(score) AS best FROM scores GROUP BY deck_id),
+     an AS (SELECT deck_id, COUNT(*) AS answers, AVG(IFF(correct, 1, 0)) AS accuracy FROM attempts GROUP BY deck_id)
+SELECT d.name, d.main_topic, d.slide_count, COALESCE(qs.levels, 0), COALESCE(qs.n, 0),
+       COALESCE(sc.plays, 0), sc.best, COALESCE(an.answers, 0), an.accuracy
+FROM decks d
+LEFT JOIN qs ON qs.deck_id = d.deck_id
+LEFT JOIN sc ON sc.deck_id = d.deck_id
+LEFT JOIN an ON an.deck_id = d.deck_id
+WHERE d.status = 'ready'
+ORDER BY d.created_at DESC;
