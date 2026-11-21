@@ -2452,6 +2452,8 @@ body,
 
 .battle .dmg {
   margin-top: calc(var(--lift, 0px) * -1);
+}
+
 /* ============================================================ polish: motion */
 
 /* screens fade up from black instead of a hard wipe */
@@ -2768,4 +2770,92 @@ body,
   .dmg {
     animation: none !important;
   }
+}
+
+/* Shelf: bigger cartridges (3 in view) whose labels wrap on whole words: the lecture name first,
+   the topic underneath, each clamped with an ellipsis instead of being cut mid-word. */
+.shelf-row {
+  left: 20px;
+  top: 20px;
+  gap: 10px;
+  max-height: none;
+}
+
+.cart {
+  width: 60px;
+  height: 72px;
+}
+
+.cart-label {
+  left: 7px;
+  top: 13px;
+  width: 46px;
+  height: 32px;
+  gap: 1px;
+  padding: 0 1px;
+}
+
+.cart-title,
+.cart-topic {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  width: 100%;
+  max-height: none;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  hyphens: manual;
+  line-height: 1.15;
+}
+
+.cart-title {
+  font-size: 5px;
+  -webkit-line-clamp: 3;
+  color: var(--paper-ink);
+}
+
+.cart-topic {
+  font-size: 3.5px;
+  -webkit-line-clamp: 2;
+  opacity: 0.75;
+}
+
+.cart-meta {
+  top: 68px;
+  font-size: 3.5px;
+}
+
+.cart.sel::after {
+  bottom: -9px;
+}
+
+.shelf-wood {
+  top: 86px;
+}
+
+.shelf-detail {
+  top: 100px;
+}
+
+.cart-del {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  font-size: 5px;
+  line-height: 9px;
+  text-align: center;
+  color: #fff;
+  background: #c03030;
+  box-shadow: 0 0 0 1px #000;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.shelf-confirm .row {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 4px;
 }

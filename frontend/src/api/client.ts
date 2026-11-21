@@ -29,6 +29,7 @@ export class Unsupported extends Error {}
 export interface Backend {
   health(): Promise<Health>
   decks(userId: string): Promise<DecksResponse>
+  deleteDeck(deckId: string): Promise<{ ok: boolean }>
   upload(file: File, name: string): Promise<UploadResult>
   startRun(userId: string, deckId: string, playerName: string): Promise<RunMap>
   map(runId: string): Promise<RunMap>
@@ -81,6 +82,7 @@ const q = encodeURIComponent
 export const realBackend: Backend = {
   health: () => request<Health>('/api/health'),
   decks: (userId) => request<DecksResponse>(`/api/decks?user_id=${q(userId)}`),
+  deleteDeck: (deckId) => request<{ ok: boolean }>(`/api/decks/${q(deckId)}`, { method: 'DELETE' }),
   upload: (file, name) => {
     const form = new FormData()
     form.append('file', file)

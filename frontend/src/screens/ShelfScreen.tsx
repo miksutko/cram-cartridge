@@ -37,6 +37,7 @@ export function ShelfScreen({ userId, busy, onPlay, onBack, onManual }: Props) {
   const [fresh, setFresh] = useState<string | null>(null)
   const [refresh, setRefresh] = useState(0)
   const [uploadErr, setUploadErr] = useState<string | null>(null)
+  const [removing, setRemoving] = useState<DeckSummary | null>(null)
   const bests = load<Record<string, number>>(BESTS, {})
   const mode = useStore(backendMode)
 
@@ -61,6 +62,25 @@ export function ShelfScreen({ userId, busy, onPlay, onBack, onManual }: Props) {
   }, [userId, refresh, mode])
 
   const count = (decks?.length ?? 0) + 1
+  const removable = (d: DeckSummary | undefined) => !!d && d.source !== 'demo' && d.source !== 'mock'
+  const askRemove = () => {
+    const d = decks?.[sel]
+    if (removable(d)) setRemoving(d!)
+  }
+  const confirmRemove = () => {
+    if (!removing) return
+    const gone = removing
+    setRemoving(null)
+    api
+      .deleteDeck(gone.deck_id)
+      .then(() => {
+        save(LOCAL_DECKS, load<DeckSummary[]>(LOCAL_DECKS, []).filter((x) => x.deck_id !== gone.deck_id))
+        setSel((s) => Math.max(0, s - 1))
+        setRefresh((n) => n + 1)
+      })
+      .catch((err) => setNote(`Could not remove it: ${errorText(err)}`))
+  }
+  useKeys({ y: confirmRemove, Enter: confirmRemove, n: () => setRemoving(null), Escape: () => setRemoving(null) }, removing !== null)
   const pick = (i: number) => {
     if (busy || !decks) return
     sfx('confirm')
@@ -79,8 +99,10 @@ export function ShelfScreen({ userId, busy, onPlay, onBack, onManual }: Props) {
       ' ': () => pick(sel),
       Escape: onBack,
       h: onManual,
+      x: askRemove,
+      Delete: askRemove,
     },
-    phase.k === 'shelf',
+    phase.k === 'shelf' && removing === null,
   )
 
   return (
@@ -91,7 +113,7 @@ export function ShelfScreen({ userId, busy, onPlay, onBack, onManual }: Props) {
       {decks === null ? (
         <Loading text="Dusting off the shelf..." />
       ) : (
-        <div className="shelf-row" style={{ transform: `translateX(${-Math.max(0, Math.min(sel - 2, count - 5)) * 46}px)` }}>
+        <div className="shelf-row" style={{ transform: `translateX(${-Math.max(0, Math.min(sel - 1, count - 3)) * 70}px)` }}>
           {decks.map((d, i) => (
             <button
               type="button"
@@ -102,11 +124,25 @@ export function ShelfScreen({ userId, busy, onPlay, onBack, onManual }: Props) {
               disabled={busy}
               title={d.name}
             >
-              <Sprite id="cartridge" />
+              <Sprite id="cartridge" scale={1.5} />
               <span className="cart-label">
-                <span className="cart-topic">{d.main_topic}</span>
-                <span className="cart-name">{d.name.replace(/^(Demo|Sample): /, '')}</span>
+                <span className="cart-title">{d.name.replace(/^(Demo|Sample): /, '')}</span>
+                {d.main_topic !== d.name.replace(/^(Demo|Sample): /, '') && <span className="cart-topic">{d.main_topic}</span>}
               </span>
+              {sel === i && removable(d) && (
+                <span
+                  className="cart-del"
+                  role="button"
+                  aria-label={`Remove ${d.name}`}
+                  title="Remove from the shelf"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setRemoving(d)
+                  }}
+                >
+                  ✕
+                </span>
+              )}
               <span className="cart-meta">
                 {d.source === 'demo' || d.source === 'mock' ? 'DEMO' : `${d.slides} SLIDES`}
                 {bests[d.deck_id] ? ` · ★${bests[d.deck_id]}` : ''}
@@ -119,7 +155,7 @@ export function ShelfScreen({ userId, busy, onPlay, onBack, onManual }: Props) {
             onMouseEnter={() => setSel(decks.length)}
             onClick={() => pick(decks.length)}
           >
-            <Sprite id="empty-slot" />
+            <Sprite id="empty-slot" scale={1.5} />
             <span className="cart-meta">{LINES.insert}</span>
           </button>
         </div>
@@ -148,7 +184,23 @@ export function ShelfScreen({ userId, busy, onPlay, onBack, onManual }: Props) {
           )}
         </PixelBox>
       )}
-      <div className="hint-line bottom">◀ ▶ PICK · ENTER PLAY · H HOW TO PLAY · ESC BACK</div>
+      <div className="hint-line bottom">◀ ▶ PICK · ENTER PLAY · X REMOVE · H HOW TO PLAY · ESC BACK</div>
+      {removing && (
+        <div className="overlay" role="alertdialog">
+          <PixelBox className="msgbox shelf-confirm">
+            <div className="msg-title">REMOVE THIS CARTRIDGE?</div>
+            <div className="msg-text">“{removing.name.replace(/^(Demo|Sample): /, '')}” leaves the shelf for everyone.</div>
+            <div className="row">
+              <button type="button" className="pbtn" onClick={confirmRemove}>
+                Y REMOVE
+              </button>
+              <button type="button" className="pbtn ghost" onClick={() => setRemoving(null)} autoFocus>
+                N KEEP
+              </button>
+            </div>
+          </PixelBox>
+        </div>
+      )}
       {note && <div className="shelf-note">{note}</div>}
 
       {phase.k === 'form' && (

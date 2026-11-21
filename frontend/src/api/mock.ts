@@ -455,6 +455,11 @@ export const mockBackend: Backend = {
     await delay(50)
     return { ok: true, snowflake: false, error: 'mock backend' }
   },
+  async deleteDeck(deckId: string) {
+    const i = decks.findIndex((d) => d.deck_id === deckId)
+    if (i >= 0) decks.splice(i, 1)
+    return { ok: i >= 0 }
+  },
   async decks() {
     await delay()
     return { decks: decks.map(summary), snowflake_error: null }
