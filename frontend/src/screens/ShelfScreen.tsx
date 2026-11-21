@@ -62,7 +62,8 @@ export function ShelfScreen({ userId, busy, onPlay, onBack, onManual }: Props) {
   }, [userId, refresh, mode])
 
   const count = (decks?.length ?? 0) + 1
-  const removable = (d: DeckSummary | undefined) => !!d && d.source !== 'demo' && d.source !== 'mock'
+  const removable = (d: DeckSummary | undefined) =>
+    !!d && d.source !== 'demo' && d.source !== 'mock' && !d.name.startsWith('Demo:')
   const askRemove = () => {
     const d = decks?.[sel]
     if (removable(d)) setRemoving(d!)

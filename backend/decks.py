@@ -161,8 +161,11 @@ def _load_snowflake_deck(deck_id: str) -> Deck | None:
 
 def hide_deck(deck_id: str) -> bool:
     """Take an uploaded cartridge off the shelf. Its rows stay (status 'deleted') so it can be
-    restored; the built-in demos cannot be removed."""
+    restored. The built-in demos and any "Demo: ..." cartridge cannot be removed."""
     if deck_id in _DEMO or not db.configured():
+        return False
+    deck = get_deck(deck_id)
+    if deck is None or deck.name.startswith("Demo:"):  # the demo cartridge stays on the shelf
         return False
     with db.pooled() as conn, conn.cursor() as cur:
         cur.execute(q("hide_deck"), {"deck_id": deck_id})
