@@ -278,20 +278,20 @@ export const phoenix = build(
   { idle: [0, 1, 0, 2], attack: [1], hurt: [2] },
 )
 
-/** Retep, the Final Storm: gold and red scales, a crown of horns, storm-cloud wings and lightning. 96x96. */
+/** Retep, the Final Storm: violet and storm-blue scales, a crown of horns, storm-cloud wings and lightning. 96x96. */
 export const retep = build(
   'retep',
   96,
   96,
   4,
   (p, pal, f) => {
-    const scale = pal.mat(['#2a0608', '#701018', '#a81c22', '#d8362c', '#f86a44'])
-    const gold = pal.mat(['#3a2404', '#9a6a0c', '#d0a018', '#f0d040', '#fff4a0'])
-    const horn = pal.mat(['#2a2010', '#8a7448', '#c8b080', '#e8dcb4', '#fffbe6'])
-    const cloud = pal.mat(['#101420', '#2e3448', '#4a5268', '#6c7690', '#9aa4bc'])
+    const scale = pal.mat(['#140a2e', '#2e1a6a', '#4a2a9e', '#6e4ad0', '#a888f4'])
+    const gold = pal.mat(['#06183a', '#1a4a8e', '#2a78c8', '#5ab4f0', '#b4ecff'])
+    const horn = pal.mat(['#2a2010', '#a08040', '#d8b860', '#f0dc90', '#fffbe0'])
+    const cloud = pal.mat(['#0c0e24', '#262a54', '#3e4478', '#5e66a4', '#8e98d0'])
     const bolt = pal.char('#e8fcff')
     const boltC = pal.char('#60e0ff')
-    const eye = pal.char('#fff060')
+    const eye = pal.char('#ffe860')
     const mouth = pal.char('#1a0204')
     const fang = pal.char('#ffffff')
     const b = f % 2 === 1 ? 1 : 0

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react'
-import { api, errorText } from '../api/client'
+import { api, backendMode, errorText } from '../api/client'
+import { useStore } from '../game/store'
 import type { DeckSummary, UploadResult } from '../api/types'
 import { Sprite } from '../art/Sprite'
 import { Background } from '../components/Background'
@@ -37,6 +38,7 @@ export function ShelfScreen({ userId, busy, onPlay, onBack, onManual }: Props) {
   const [refresh, setRefresh] = useState(0)
   const [uploadErr, setUploadErr] = useState<string | null>(null)
   const bests = load<Record<string, number>>(BESTS, {})
+  const mode = useStore(backendMode)
 
   useEffect(() => {
     let alive = true
@@ -56,7 +58,7 @@ export function ShelfScreen({ userId, busy, onPlay, onBack, onManual }: Props) {
     return () => {
       alive = false
     }
-  }, [userId, refresh])
+  }, [userId, refresh, mode])
 
   const count = (decks?.length ?? 0) + 1
   const pick = (i: number) => {

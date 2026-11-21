@@ -5,6 +5,8 @@ import { rng } from './pixel'
 // (rain, snow, embers...) is drawn per frame by drawAtmosphere().
 
 export type BiomeId = 'l1' | 'l2' | 'l3' | 'l4' | 'l5' | 'summit'
+/** Every drawable scene: the six biomes plus the bright dawn title scene. */
+export type SceneId = BiomeId | 'title'
 export const W = 240
 export const H = 160
 /** Where feet touch the ground in battle scenes. */
@@ -127,7 +129,34 @@ function tree(R: Raster, r: () => number, x: number, ground: number, h: number, 
   branch(x, ground - h * 0.7, -Math.PI / 2 + 0.6, h * 0.35, 3)
 }
 
-const PAINT: Record<BiomeId, (R: Raster, r: () => number) => void> = {
+const PAINT: Record<SceneId, (R: Raster, r: () => number) => void> = {
+  title(R, r) {
+    // Dawn over Mount Cram: a warm, hopeful sky for the title screen.
+    R.gradient(0, 112, ['#2a1a5e', '#5a2a8a', '#b04a8a', '#f07a5a', '#ffb860', '#ffe0a0'])
+    R.glow(178, 96, 46, '#fff0b0', 0.85)
+    for (let y = -12; y <= 12; y++) for (let x = -12; x <= 12; x++) if (x * x + y * y <= 144 && 96 + y < 100) R.set(178 + x, 96 + y, hex(x * x + y * y > 110 ? '#ffd870' : '#fff4c0'))
+    for (let i = 0; i < 8; i++) {
+      const cx = r() * W
+      const cy = 12 + r() * 46
+      for (let k = 0; k < 5; k++) R.glow(cx + k * 8 - 16, cy + (k % 2) * 2, 9, i % 2 ? '#ffb0c0' : '#ffd8a0', 0.6)
+    }
+    // distant purple range, then Mount Cram itself with a snowy peak
+    R.ridge(waves(r, 84, 7), '#6a3a8a', '#9a5aa8', 3)
+    R.poly([[20, 112], [96, 22], [112, 30], [124, 16], [200, 112]], '#3e2a6a')
+    R.poly([[96, 22], [112, 30], [124, 16], [134, 34], [122, 40], [110, 36], [100, 42], [88, 36]], '#f4f0ff')
+    R.poly([[124, 16], [200, 112], [160, 112], [128, 40]], '#2e1e54')
+    R.ridge(waves(r, 100, 3), '#3a7a3a', '#6ab84a', 3)
+    // the ruined temple, lit gold by the sunrise
+    R.rect(150, 66, 62, 5, hex('#c8963a'))
+    R.poly([[146, 66], [181, 52], [216, 66]], '#e0b04a')
+    for (const x of [154, 168, 182, 196]) {
+      R.rect(x, 71, 5, 28, hex('#f0d080'))
+      R.rect(x + 3, 71, 2, 28, hex('#b8863a'))
+    }
+    R.ridge(waves(r, GROUND + 2, 1.5), '#4a9a3a', '#8ad050', 2)
+    for (let i = 0; i < 50; i++) R.set(r() * W, GROUND + 4 + r() * 40, hex(i % 3 ? '#3a8a34' : '#f8e070'))
+    R.ridge(waves(r, 128, 3), '#2e6a2e', '#4a9a3a', 2)
+  },
   l1(R, r) {
     // Underground labyrinth: stone walls, dark arches, torchlight.
     R.gradient(0, H, ['#120c0c', '#1e1614', '#2a201c'])
@@ -252,10 +281,10 @@ const PAINT: Record<BiomeId, (R: Raster, r: () => number) => void> = {
   },
 }
 
-const SEEDS: Record<BiomeId, number> = { l1: 11, l2: 23, l3: 37, l4: 41, l5: 53, summit: 67 }
+const SEEDS: Record<SceneId, number> = { l1: 11, l2: 23, l3: 37, l4: 41, l5: 53, summit: 67, title: 71 }
 const cache = new Map<string, HTMLCanvasElement>()
 
-export function backgroundCanvas(id: BiomeId): HTMLCanvasElement {
+export function backgroundCanvas(id: SceneId): HTMLCanvasElement {
   const hit = cache.get(id)
   if (hit) return hit
   const R = new Raster()
@@ -285,14 +314,14 @@ export interface Atmos {
   flash: number
 }
 
-export function makeAtmos(id: BiomeId): Atmos {
+export function makeAtmos(id: SceneId): Atmos {
   const r = rng(SEEDS[id] + 1)
-  const n = { l1: 0, l2: 90, l3: 14, l4: 70, l5: 40, summit: 6 }[id]
+  const n = { l1: 0, l2: 90, l3: 14, l4: 70, l5: 40, summit: 6, title: 7 }[id]
   return { parts: Array.from({ length: n }, () => ({ x: r() * W, y: r() * H, v: 0.5 + r(), s: r() })), flash: 0 }
 }
 
 /** Draw one frame of the biome's moving layer onto ctx (cleared first). t is in frames (~15fps). */
-export function drawAtmosphere(ctx: CanvasRenderingContext2D, id: BiomeId, a: Atmos, t: number): void {
+export function drawAtmosphere(ctx: CanvasRenderingContext2D, id: SceneId, a: Atmos, t: number): void {
   ctx.clearRect(0, 0, W, H)
   const px = (x: number, y: number, c: string, w = 1, h = 1) => {
     ctx.fillStyle = c
@@ -363,13 +392,14 @@ export function drawAtmosphere(ctx: CanvasRenderingContext2D, id: BiomeId, a: At
     ctx.fillStyle = `rgba(255,90,30,${0.06 + 0.04 * Math.sin(t / 6)})`
     ctx.fillRect(0, 120, W, 40)
   } else {
-    ctx.fillStyle = 'rgba(220,225,235,0.22)'
+    ctx.fillStyle = id === 'title' ? 'rgba(255,230,240,0.3)' : 'rgba(220,225,235,0.22)'
     for (const p of a.parts) {
       p.x -= 0.25 * p.v
       if (p.x < -60) p.x = W + 10
       ctx.fillRect(Math.round(p.x), Math.round(20 + p.s * 60), 50, 5)
       ctx.fillRect(Math.round(p.x) + 8, Math.round(17 + p.s * 60), 30, 3)
     }
+    if (id === 'title') return
     if (a.flash <= 0 && Math.random() < 0.006) a.flash = 5
     if (a.flash > 0) {
       a.flash--

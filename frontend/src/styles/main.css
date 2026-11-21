@@ -2261,3 +2261,27 @@ canvas {
   word-break: break-all;
   hyphens: none;
 }
+
+/* compact 2x2 choices when every option is short: keeps the fighters visible */
+.choices.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px 2px;
+}
+
+/* a pale rim so the hero reads on dark scenes (storm, forest) */
+.fighter.player img {
+  filter: drop-shadow(1px 0 0 rgba(232, 224, 255, 0.85)) drop-shadow(-1px 0 0 rgba(232, 224, 255, 0.85))
+    drop-shadow(0 -1px 0 rgba(232, 224, 255, 0.85));
+}
+
+.g-scene {
+  width: 480px;
+  height: 320px;
+  overflow: hidden;
+}
+
+.g-scene .screen {
+  transform: scale(2);
+  transform-origin: 0 0;
+}

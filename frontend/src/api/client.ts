@@ -104,6 +104,7 @@ export const backendMode = createStore<BackendMode>('checking')
 export const healthStore = createStore<Health | null>(null)
 
 let active: Backend = realBackend
+let forcedMock = false
 
 /** The backend every screen talks to (real, or the mock when it is active). */
 export const api: Backend = new Proxy({} as Backend, {
@@ -121,6 +122,7 @@ export async function initBackend(): Promise<void> {
   } catch {
     // ignore
   }
+  forcedMock = forced
   if (!forced) {
     try {
       const h = await realBackend.health()
@@ -136,6 +138,25 @@ export async function initBackend(): Promise<void> {
   active = mockBackend
   healthStore.set(await mockBackend.health())
   backendMode.set('mock')
+}
+
+/**
+ * If we fell back to the mock only because the backend was down at startup, try the
+ * real backend again. Call this only where no run is in progress (start, shelf...).
+ * Returns true when the real backend is (now) active.
+ */
+export async function reconnect(): Promise<boolean> {
+  if (backendMode.get() === 'real') return true
+  if (forcedMock) return false
+  try {
+    const h = await realBackend.health()
+    healthStore.set(h)
+    active = realBackend
+    backendMode.set('real')
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function errorText(err: unknown): string {

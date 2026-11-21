@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, backendMode, errorText, initBackend } from './api/client'
+import { api, backendMode, errorText, initBackend, reconnect } from './api/client'
 import type { DeckSummary, Level, Report, RunOver } from './api/types'
 import { ConsoleFrame } from './components/ConsoleFrame'
 import { DevPanel } from './components/DevPanel'
@@ -97,6 +97,14 @@ export default function App() {
       window.removeEventListener('pointerdown', unlock)
     }
   }, [])
+
+  // On run-free screens, keep trying to leave the fallback mock for the real backend.
+  const runFree = ['start', 'name', 'shelf', 'manual', 'settings'].includes(screen.name)
+  useEffect(() => {
+    if (mode !== 'mock' || !runFree) return
+    const id = window.setInterval(() => void reconnect(), 5000)
+    return () => window.clearInterval(id)
+  }, [mode, runFree])
 
   useEffect(() => {
     const slot =

@@ -112,7 +112,7 @@ export const nodeBlitz = build('node-blitz', 16, 16, 1, (p, pal) => {
 })
 
 export const nodeBoss = build('node-boss', 16, 16, 1, (p, pal) => {
-  const red = pal.mat(['#2a0608', '#7a1018', '#b81c24', '#e0402e', '#ff8060'])
+  const red = pal.mat(['#140a2e', '#2e1a6a', '#4a2a9e', '#6e4ad0', '#a888f4'])
   const horn = pal.char('#f0d060')
   const eye = pal.char('#fff060')
   p.fill(poly([2, 6], [12, 4], [15, 9], [10, 13], [2, 12]), red)

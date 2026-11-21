@@ -5,7 +5,7 @@ import { settings, update } from '../game/settings'
 export function NameScreen({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
   return (
     <div className="scr">
-      <Background biome="summit" still />
+      <Background biome="title" still />
       <NameEntry
         initial={settings.get().name ?? ''}
         onDone={(name) => {

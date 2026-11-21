@@ -153,3 +153,14 @@ export const MANUAL = [
     ],
   },
 ]
+
+/** The team's chosen tracks per music slot (files go in src/assets/music/<slot>.mp3). */
+export const MUSIC: Record<string, { title: string; artist: string }> = {
+  title: { title: 'The Throne is Mine', artist: 'Ruiqi Zhao' },
+  level1: { title: 'At All Costs', artist: 'Dream Cave' },
+  level2: { title: 'A Sinking Ship', artist: 'Wendel Scherer' },
+  level3: { title: 'The End is Nigh', artist: 'Max Anson' },
+  level4: { title: 'Anomaly', artist: 'Christoffer Moe Ditlevsen' },
+  level5: { title: 'Howling Hell', artist: 'Jon Bjork' },
+  summit: { title: 'Epic Triumph', artist: 'Elm Lake' },
+}

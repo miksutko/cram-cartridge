@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
-import { backgroundCanvas, drawAtmosphere, H, makeAtmos, W, type BiomeId } from '../art/backgrounds'
+import { backgroundCanvas, drawAtmosphere, H, makeAtmos, W, type SceneId } from '../art/backgrounds'
 import { prefersReducedMotion } from '../game/settings'
 
 interface Props {
-  biome: BiomeId
+  biome: SceneId
   className?: string
   /** Turn the moving layer off (e.g. behind a busy overlay). */
   still?: boolean

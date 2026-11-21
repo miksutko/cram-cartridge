@@ -331,7 +331,7 @@ export function Battle({ userId, run, fight, items: startItems, score: startScor
               </button>
             </form>
           ) : (
-            <div className="choices">
+            <div className={`choices ${question.choices.every((c) => c.length <= 24) ? 'grid' : ''}`}>
               {question.choices.map((c, i) => {
                 let state = ''
                 if (result) state = i === result.answer.index ? 'right' : i === picked ? 'wrong' : 'dim'

@@ -169,7 +169,7 @@ export function StartScreen({ attract, onStart, onManual, onSettings }: Props) {
 
   return (
     <div className="scr start">
-      <Background biome="summit" />
+      <Background biome="title" />
       <div className="start-dragon">
         <Sprite id="retep" />
       </div>

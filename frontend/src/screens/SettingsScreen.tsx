@@ -35,7 +35,7 @@ export function SettingsScreen({ onBack, onChangeName }: { onBack: () => void; o
   })
   return (
     <div className="scr settings">
-      <Background biome="summit" still />
+      <Background biome="title" still />
       <div className="scr-title">SETTINGS</div>
       <PixelBox className="settings-box">
         {rows.map((r, i) => (
