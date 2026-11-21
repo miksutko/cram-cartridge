@@ -58,6 +58,8 @@ assets only; never copy art, characters or names from existing games.
 - POST /api/run     {user_id, deck_id, player_name?} -> {run_id, hp, max_hp, items, map, current_node_id, player_name}
 - GET  /api/map?run_id= -> {run_id, main_topic, hp, max_hp, items, map, current_node_id}
 - POST /api/node    {run_id, node_id} -> fight {kind, enemy, questions, current_q_id, trace} | treasure {kind, choices}
+                    (dragon: other_lecture questions carry similarity, the cosine score vs your latest miss;
+                    the VECTOR_COSINE_SIMILARITY trace step has detail {anchor, matches})
 - POST /api/answer  {user_id, run_id, q_id, choice | text} -> {correct, answer, explanation,
                     taunt, quote|null, player_hp, enemy_hp, node_cleared, next_q_id, run_status,
                     run_over|null}; a missed question comes back as next_q_id later in the same fight
