@@ -102,9 +102,23 @@ def _escape_inner_quotes(snippet: str) -> str:
     return "".join(out)
 
 
+_TEXT_KEYS = r"(?:question|explanation|quote)"
+_NEXT_KEY = r'(?=\s*,\s*"(?:question|choices|answer|explanation|page|quote)"\s*:|\s*\})'
+
+
+def _quote_bare_values(snippet: str) -> str:
+    """Wrap text values the model left unquoted ("explanation": A tautology is ...)."""
+    def wrap(m: re.Match) -> str:
+        value = m.group(2).strip().replace("\\", "\\\\").replace('"', '\\"')
+        return f'{m.group(1)}"{value}"'
+    return re.sub(rf'("{_TEXT_KEYS}"\s*:\s*)(?=[^\s"\[{{\d-])(.+?){_NEXT_KEY}', wrap, snippet, flags=re.S)
+
+
 def _loads(snippet: str) -> Any:
     snippet = _latex_to_symbols(snippet)
-    for fix in (lambda x: x, _repair_escapes, lambda x: _escape_inner_quotes(_repair_escapes(x))):
+    fixes = (lambda x: x, _repair_escapes, lambda x: _escape_inner_quotes(_repair_escapes(x)),
+             lambda x: _quote_bare_values(_repair_escapes(x)))
+    for fix in fixes:
         try:
             return json.loads(fix(snippet))
         except json.JSONDecodeError:

@@ -106,13 +106,13 @@ def list_decks() -> tuple[list[dict], str | None]:
                 rows = cur.fetchall()
     except Exception as exc:  # the shelf still works with the demo decks
         return decks, str(exc)
-    for deck_id, name, main_topic, slides, _chunks, subtopic_count in rows:
-        if subtopic_count:
-            decks.append({
-                "deck_id": deck_id, "name": name, "main_topic": main_topic or name,
-                "source": "snowflake", "subtopics": None, "slides": slides or 0,
-            })
-    return decks, None
+    uploaded = [
+        {"deck_id": deck_id, "name": name, "main_topic": main_topic or name,
+         "source": "snowflake", "subtopics": None, "slides": slides or 0}
+        for deck_id, name, main_topic, slides, _chunks, subtopic_count in rows if subtopic_count
+    ]
+    # The built-in demos are the offline fallback; with real cartridges on the shelf, hide them.
+    return (uploaded or decks), None
 
 
 def get_deck(deck_id: str) -> Deck | None:
