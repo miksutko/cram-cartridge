@@ -154,8 +154,11 @@ export const MANUAL = [
   },
 ]
 
-/** The team's chosen tracks per music slot (files go in src/assets/music/<slot>.mp3). */
-export const MUSIC: Record<string, { title: string; artist: string }> = {
+/**
+ * The tracks the team picked as the mood for each level. The game's music is our own
+ * chiptune (src/game/songs.ts) written to match these moods; these tracks are not used.
+ */
+export const MUSIC_MOODS: Record<string, { title: string; artist: string }> = {
   title: { title: 'The Throne is Mine', artist: 'Ruiqi Zhao' },
   level1: { title: 'At All Costs', artist: 'Dream Cave' },
   level2: { title: 'A Sinking Ship', artist: 'Wendel Scherer' },

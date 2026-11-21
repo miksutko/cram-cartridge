@@ -1,196 +1,254 @@
 import { audio } from './sfx'
 import { settings } from './settings'
+import { SONG_FOR_SLOT, SONGS, type Song } from './songs'
 
-// Music player for the team's tracks. Drop files into src/assets/music/ named by slot
-// (e.g. level2.mp3) and they play there, run through a "retro" chain so any track
-// sounds like it comes out of a handheld: bit-crushed, sample-rate reduced and
-// band-limited to a tiny speaker. See src/assets/music/README.md and MUSIC in content.ts.
+// A tiny chiptune player: our own songs (songs.ts) synthesised live with Web Audio —
+// pulse-wave lead, triangle bass, noise drums — through a small-speaker filter.
+// No audio files. Music starts after the first key press or click (browsers block
+// autoplay), loops, and crossfades between slots.
 
 export type MusicSlot =
   | 'title' | 'shelf' | 'map'
   | 'level1' | 'level2' | 'level3' | 'level4' | 'level5'
   | 'summit' | 'boss' | 'victory' | 'defeat'
 
-const files = import.meta.glob('../assets/music/*.{mp3,ogg,wav}', { eager: true, query: '?url', import: 'default' }) as Record<string, string>
-const tracks: Partial<Record<string, string>> = {}
-for (const [path, url] of Object.entries(files)) {
-  const slot = path.split('/').pop()!.replace(/\.(mp3|ogg|wav)$/, '')
-  tracks[slot] = url
+interface Ev {
+  step: number
+  freq: number
+  len: number
 }
 
-/** If a slot has no file, try these in order (then silence). */
-const FALLBACK: Record<MusicSlot, MusicSlot[]> = {
-  title: [],
-  shelf: ['title'],
-  map: ['title'],
-  level1: ['map', 'title'],
-  level2: ['map', 'title'],
-  level3: ['map', 'title'],
-  level4: ['map', 'title'],
-  level5: ['map', 'title'],
-  summit: ['map', 'title'],
-  boss: ['summit', 'map', 'title'],
-  victory: ['summit'],
-  defeat: [],
+interface Compiled {
+  song: Song
+  steps: number
+  lead: Ev[]
+  bass: Ev[]
+  drums: string[]
 }
 
-const ONE_SHOT = new Set<MusicSlot>(['victory', 'defeat'])
-const FADE_S = 0.5
+const NOTE: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }
 
-// ---------------------------------------------------------------- retro chain
+function freq(name: string): number {
+  const m = /^([A-G])(#|b)?(-?\d)$/.exec(name)
+  if (!m) return 0
+  const semis = NOTE[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0) + (Number(m[3]) + 1) * 12
+  return 440 * 2 ** ((semis - 69) / 12)
+}
 
-const CRUSHER = `
-class Crusher extends AudioWorkletProcessor {
-  constructor() { super(); this.hold = [0, 0]; this.n = 0 }
-  process(inputs, outputs) {
-    const inp = inputs[0], out = outputs[0]
-    const step = 2 / 64          // ~6-bit amplitude
-    const every = 4              // ~12 kHz sample-and-hold at 48 kHz
-    for (let ch = 0; ch < out.length; ch++) {
-      const i = inp[ch] || inp[0], o = out[ch]
-      if (!i) { o.fill(0); continue }
-      let n = this.n
-      for (let k = 0; k < o.length; k++) {
-        if (n % every === 0) this.hold[ch] = Math.round(i[k] / step) * step
-        o[k] = this.hold[ch]
-        n++
-      }
-      if (ch === out.length - 1) this.n = n
-    }
-    return true
+function parseLine(text: string): { events: Ev[]; steps: number } {
+  const toks = text.replace(/\|/g, ' ').split(/\s+/).filter(Boolean)
+  const events: Ev[] = []
+  toks.forEach((t, i) => {
+    const last = events[events.length - 1]
+    if (t === '-' && last && last.step + last.len === i) last.len++
+    else if (t !== '.' && t !== '-') events.push({ step: i, freq: freq(t), len: 1 })
+  })
+  return { events, steps: toks.length }
+}
+
+function bassFor(roots: string, style: Song['bassStyle'], bars: number): Ev[] {
+  const rs = roots.split(/\s+/).filter(Boolean).map(freq)
+  const out: Ev[] = []
+  for (let b = 0; b < bars; b++) {
+    const f = rs[b % rs.length]
+    const at = b * 16
+    const pat: [number, number, number][] = // [step, frequency multiplier, length]
+      style === 'pulse'
+        ? [0, 2, 4, 6, 8, 10, 12, 14].map((s) => [s, s % 4 === 2 ? 2 : 1, 1])
+        : style === 'octave'
+          ? [[0, 1, 3], [4, 2, 2], [8, 1, 3], [12, 2, 2]]
+          : style === 'drone'
+            ? [[0, 1, 14]]
+            : style === 'arp'
+              ? [[0, 1, 2], [3, 1.5, 2], [6, 2, 2], [9, 1.5, 2], [12, 1, 2]]
+              : [0, 3, 4, 6, 7, 8, 11, 12, 14, 15].map((s) => [s, s % 8 === 0 ? 1 : s % 4 === 3 ? 2 : 1, 1])
+    for (const [s, mul, len] of pat) out.push({ step: at + s, freq: f * mul, len })
   }
-}
-registerProcessor('cram-crusher', Crusher)
-`
-
-interface Chain {
-  input: AudioNode
-  gain: GainNode
+  return out
 }
 
-let chain: Promise<Chain | null> | null = null
+const compiled = new Map<string, Compiled>()
+function compile(name: string): Compiled {
+  const hit = compiled.get(name)
+  if (hit) return hit
+  const song = SONGS[name]
+  const { events, steps } = parseLine(song.lead)
+  const bars = Math.ceil(steps / 16)
+  const c: Compiled = { song, steps: bars * 16, lead: events, bass: bassFor(song.roots, song.bassStyle, bars), drums: song.drums.split(/\s+/) }
+  compiled.set(name, c)
+  return c
+}
 
-function retroChain(): Promise<Chain | null> {
-  if (chain) return chain
-  chain = (async () => {
-    const a = audio()
-    if (!a) return null
-    const gain = a.createGain()
-    gain.gain.value = 0
-    const hp = a.createBiquadFilter()
-    hp.type = 'highpass'
-    hp.frequency.value = 140
-    const lp = a.createBiquadFilter()
-    lp.type = 'lowpass'
-    lp.frequency.value = 4200
-    hp.connect(lp).connect(gain).connect(a.destination)
-    let input: AudioNode = hp
-    try {
-      const url = URL.createObjectURL(new Blob([CRUSHER], { type: 'application/javascript' }))
-      await a.audioWorklet.addModule(url)
-      const crusher = new AudioWorkletNode(a, 'cram-crusher', { outputChannelCount: [2] })
-      crusher.connect(hp)
-      input = crusher
-    } catch {
-      // no worklet support: band-limit only
-    }
-    return { input, gain }
-  })()
-  return chain
+// ---------------------------------------------------------------- instruments
+
+const waves = new Map<number, PeriodicWave>()
+function pulse(a: AudioContext, duty: number): PeriodicWave {
+  const hit = waves.get(duty)
+  if (hit) return hit
+  const n = 32
+  const real = new Float32Array(n)
+  const imag = new Float32Array(n)
+  for (let k = 1; k < n; k++) real[k] = (2 / (k * Math.PI)) * Math.sin(k * Math.PI * duty)
+  const w = a.createPeriodicWave(real, imag)
+  waves.set(duty, w)
+  return w
+}
+
+let noiseBuf: AudioBuffer | null = null
+function noise(a: AudioContext): AudioBuffer {
+  if (noiseBuf) return noiseBuf
+  noiseBuf = a.createBuffer(1, Math.floor(a.sampleRate * 0.3), a.sampleRate)
+  const d = noiseBuf.getChannelData(0)
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1
+  return noiseBuf
+}
+
+function note(a: AudioContext, out: AudioNode, f: number, t: number, dur: number, wave: Song['leadWave'] | 'bass', vol: number): void {
+  if (!f) return
+  const o = a.createOscillator()
+  if (wave === 'triangle' || wave === 'bass') o.type = 'triangle'
+  else o.setPeriodicWave(pulse(a, wave))
+  o.frequency.setValueAtTime(f, t)
+  const g = a.createGain()
+  g.gain.setValueAtTime(0, t)
+  g.gain.linearRampToValueAtTime(vol, t + 0.005)
+  g.gain.setValueAtTime(vol * 0.8, t + Math.max(0.01, dur - 0.03))
+  g.gain.linearRampToValueAtTime(0, t + dur)
+  o.connect(g).connect(out)
+  o.start(t)
+  o.stop(t + dur + 0.02)
+}
+
+function drum(a: AudioContext, out: AudioNode, kind: string, t: number): void {
+  if (kind === 'k') {
+    const o = a.createOscillator()
+    const g = a.createGain()
+    o.frequency.setValueAtTime(150, t)
+    o.frequency.exponentialRampToValueAtTime(40, t + 0.12)
+    g.gain.setValueAtTime(0.5, t)
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.14)
+    o.connect(g).connect(out)
+    o.start(t)
+    o.stop(t + 0.15)
+    return
+  }
+  const src = a.createBufferSource()
+  src.buffer = noise(a)
+  const f = a.createBiquadFilter()
+  f.type = kind === 'h' ? 'highpass' : 'bandpass'
+  f.frequency.value = kind === 'h' ? 7000 : 1800
+  const g = a.createGain()
+  const dur = kind === 'h' ? 0.03 : 0.12
+  g.gain.setValueAtTime(kind === 'h' ? 0.12 : 0.3, t)
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur)
+  src.connect(f).connect(g).connect(out)
+  src.start(t)
+  src.stop(t + dur + 0.01)
 }
 
 // ---------------------------------------------------------------- player
 
+interface Playing {
+  slot: MusicSlot
+  name: string
+  bus: GainNode
+  timer: number
+  nextStep: number
+  nextTime: number
+}
+
 let unlocked = false
 let wanted: MusicSlot | null = null
-let current: { slot: string; el: HTMLAudioElement; src: MediaElementAudioSourceNode | null } | null = null
+let current: Playing | null = null
+let master: GainNode | null = null
 
 function volume(): number {
-  return Math.max(0, Math.min(1, settings.get().music)) * 0.8
+  return Math.max(0, Math.min(1, settings.get().music)) * 0.35
 }
 
-function resolve(slot: MusicSlot): string | null {
-  for (const s of [slot, ...FALLBACK[slot]]) if (tracks[s]) return s
-  return null
+function output(a: AudioContext): GainNode {
+  if (master) return master
+  master = a.createGain()
+  master.gain.value = volume()
+  const lp = a.createBiquadFilter()
+  lp.type = 'lowpass'
+  lp.frequency.value = 6000
+  master.connect(lp).connect(a.destination)
+  return master
 }
 
-async function apply(): Promise<void> {
-  if (!unlocked || !wanted) return
-  const slot = resolve(wanted)
-  if (current && current.slot === slot) return
+function stop(p: Playing, a: AudioContext): void {
+  window.clearInterval(p.timer)
+  p.bus.gain.cancelScheduledValues(a.currentTime)
+  p.bus.gain.setTargetAtTime(0, a.currentTime, 0.12)
+  window.setTimeout(() => p.bus.disconnect(), 800)
+}
+
+function start(slot: MusicSlot): void {
   const a = audio()
-  const c = await retroChain()
-  const old = current
-  current = null
-  if (old) {
-    if (c && a) {
-      c.gain.gain.cancelScheduledValues(a.currentTime)
-      c.gain.gain.setTargetAtTime(0, a.currentTime, FADE_S / 4)
+  if (!a) return
+  if (a.state === 'suspended') void a.resume()
+  const name = SONG_FOR_SLOT[slot] ?? 'title'
+  if (current && current.name === name) {
+    current.slot = slot
+    return
+  }
+  if (current) stop(current, a)
+  const c = compile(name)
+  const bus = a.createGain()
+  bus.gain.setValueAtTime(0, a.currentTime)
+  bus.gain.linearRampToValueAtTime(1, a.currentTime + 0.5)
+  bus.connect(output(a))
+  const stepDur = 60 / c.song.bpm / 4
+  const p: Playing = { slot, name, bus, timer: 0, nextStep: 0, nextTime: a.currentTime + 0.12 }
+  const leadAt = new Map(c.lead.map((e) => [e.step, e]))
+  const bassAt = new Map(c.bass.map((e) => [e.step, e]))
+  const tick = () => {
+    while (p.nextTime < a.currentTime + 0.15) {
+      if (p.nextStep >= c.steps) {
+        if (!c.song.loop) {
+          window.clearInterval(p.timer)
+          return
+        }
+        p.nextStep = 0
+      }
+      const s = p.nextStep
+      const l = leadAt.get(s)
+      if (l) note(a, bus, l.freq, p.nextTime, l.len * stepDur * 0.95, c.song.leadWave, 0.16)
+      const b = bassAt.get(s)
+      if (b) note(a, bus, b.freq, p.nextTime, b.len * stepDur * 0.9, 'bass', 0.22)
+      const d = c.drums[s % c.drums.length]
+      if (d && d !== '.') drum(a, bus, d, p.nextTime)
+      p.nextStep++
+      p.nextTime += stepDur
     }
-    window.setTimeout(() => {
-      old.el.pause()
-      old.src?.disconnect()
-    }, FADE_S * 1000)
   }
-  if (!slot) return
-  const el = new Audio(tracks[slot])
-  el.loop = !ONE_SHOT.has(wanted)
-  let src: MediaElementAudioSourceNode | null = null
-  if (a && c) {
-    try {
-      src = a.createMediaElementSource(el)
-      src.connect(c.input)
-    } catch {
-      src = null
-    }
-  }
-  current = { slot, el, src }
-  const start = () => {
-    if (a && c && src) {
-      if (a.state === 'suspended') void a.resume()
-      c.gain.gain.cancelScheduledValues(a.currentTime)
-      c.gain.gain.setTargetAtTime(volume(), a.currentTime + (old ? FADE_S : 0), FADE_S / 3)
-    } else el.volume = volume()
-  }
-  window.setTimeout(
-    () => {
-      if (current?.el !== el) return
-      el.play().then(start).catch(() => {
-        // autoplay blocked or file missing: stay silent
-      })
-    },
-    old ? FADE_S * 1000 : 0,
-  )
+  p.timer = window.setInterval(tick, 25)
+  tick()
+  current = p
 }
 
 /** Ask for a slot; it starts once the browser allows audio (first key or click). */
 export function playMusic(slot: MusicSlot): void {
   wanted = slot
-  void apply()
+  if (unlocked) start(slot)
 }
 
 /** Call from the first user gesture. */
 export function unlockMusic(): void {
   if (unlocked) return
   unlocked = true
-  void apply()
+  if (wanted) start(wanted)
 }
 
 settings.subscribe(() => {
   const a = audio()
-  if (!current || !a) return
-  if (current.src) void retroChain().then((c) => c?.gain.gain.setTargetAtTime(volume(), a.currentTime, 0.05))
-  else current.el.volume = volume()
+  if (master && a) master.gain.setTargetAtTime(volume(), a.currentTime, 0.05)
 })
 
-export function musicSlots(): string[] {
-  return Object.keys(tracks)
-}
-
-/** For tests and the dev panel: what is playing right now. */
-export function nowPlaying(): { slot: string; playing: boolean; retro: boolean } | null {
-  if (!current) return null
-  return { slot: current.slot, playing: !current.el.paused, retro: current.src !== null }
+/** For tests: what is playing right now. */
+export function nowPlaying(): { slot: string; song: string } | null {
+  return current ? { slot: current.slot, song: current.name } : null
 }
 
 if (import.meta.env.DEV) (window as unknown as { __cramMusic: typeof nowPlaying }).__cramMusic = nowPlaying

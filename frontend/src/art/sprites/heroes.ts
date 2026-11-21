@@ -302,10 +302,11 @@ export const retep = build(
     // tail
     p.fill(path([[72, 66], [86, 72], [91, 84], [84, 92]], 5.5, 1.8), scale)
     p.fill(poly([84, 89], [76, 94], [86, 95], [90, 90]), gold)
-    // back leg
-    p.fill(ellipse(68, 70, 9, 10), scale)
-    p.fill(ellipse(66, 84, 9, 4), scale)
-    p.dots([[58, 87], [60, 87], [62, 87]], horn.l)
+    // hind leg: thick thigh, angled shin, a planted foot with three claws
+    p.fill(ellipse(67, 69, 10, 11), scale)
+    p.fill(path([[70, 74], [74, 82], [71, 88]], 4.6, 3.6), scale)
+    p.fill(poly([62, 87], [76, 86], [78, 91], [60, 91]), scale, { edge: false })
+    p.dots([[59, 91], [62, 91], [65, 91]], horn.l).dots([[59, 90], [62, 90], [65, 90]], horn.m)
     // body and belly plates
     p.fill(ellipse(54, 58 + b, 22, 16), scale)
     p.fill(ellipse(47, 63 + b, 13, 9), gold)
@@ -327,17 +328,18 @@ export const retep = build(
     p.fill(path([[23 + atk, 15 + b], [21 + atk, 6 + b], [22 + atk, 0 + b]], 2, 0.7), horn)
     p.fill(path([[27 + atk, 16 + b], [31 + atk, 7 + b], [36 + atk, 2 + b]], 2.2, 0.7), horn)
     p.fill(path([[30 + atk, 19 + b], [37 + atk, 14 + b], [42 + atk, 12 + b]], 1.8, 0.6), horn)
-    p.fill(rect(16 + atk, 14 + b, 15, 2), gold)
-    // front leg and claws
-    p.fill(path([[42, 64 + b], [37, 78], [30, 86]], 4.6, 3.4), scale)
-    p.dots([[26, 87], [28, 88], [31, 88]], horn.l)
+    // fore leg: shoulder, forearm and a planted foot on the same ground line as the hind foot
+    p.fill(ellipse(43, 65 + b, 6.5, 7), scale)
+    p.fill(path([[42, 68 + b], [39, 79], [37, 87]], 4.4, 3.4), scale)
+    p.fill(poly([29, 87], [42, 86], [43, 91], [27, 91]), scale)
+    p.dots([[26, 91], [29, 91], [32, 91]], horn.l).dots([[26, 90], [29, 90], [32, 90]], horn.m)
     p.outline().clean()
     // lightning flickers along the body (different every frame)
     const bolts: [number, number][][] = [
       [[34, 52], [40, 56], [38, 60], [46, 62], [44, 68]],
       [[60, 46], [56, 52], [62, 54], [58, 60], [64, 64]],
       [[70, 26], [64, 30], [70, 32], [62, 38]],
-      [[30, 38], [34, 42], [30, 46], [36, 50]],
+      [[56, 66], [60, 70], [56, 72], [62, 76]],
     ]
     const pick = [bolts[f % 4], bolts[(f + 2) % 4]]
     for (const pts of pick) {

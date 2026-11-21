@@ -2285,3 +2285,150 @@ canvas {
   transform: scale(2);
   transform-origin: 0 0;
 }
+
+/* symmetric case: same corner radius all round, bezel fully inside the case */
+.console {
+  border-radius: 14px;
+}
+
+.console-bezel {
+  border-radius: 6px;
+}
+
+.console.compact {
+  border-radius: 14px;
+}
+
+.console.compact .console-bezel {
+  margin-bottom: 0;
+}
+
+/* ------------------------------------------------------------ full handheld body (runs off-screen) */
+
+html,
+body,
+#root,
+.app {
+  overflow: hidden;
+}
+
+.console,
+.console.compact {
+  border-radius: 14px 14px 22px 22px;
+}
+
+.console-controls {
+  display: none;
+}
+
+.console-body {
+  position: relative;
+  height: 154px;
+}
+
+.console-body .console-brand {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 8px;
+  text-align: center;
+  transform: none;
+  font-size: 5px;
+  letter-spacing: 2px;
+  color: #8a84a8;
+}
+
+.console-body .dpad {
+  position: absolute;
+  left: 30px;
+  top: 34px;
+  width: 36px;
+  height: 36px;
+}
+
+.console-body .dpad-h {
+  left: 0;
+  top: 12px;
+  width: 36px;
+  height: 12px;
+}
+
+.console-body .dpad-v {
+  left: 12px;
+  top: 0;
+  width: 12px;
+  height: 36px;
+}
+
+.dpad-hub {
+  left: 15px;
+  top: 15px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #12101c !important;
+}
+
+.console-body .gems {
+  position: absolute;
+  right: 30px;
+  top: 34px;
+  gap: 12px;
+}
+
+.console-body .gem {
+  width: 15px;
+  height: 15px;
+}
+
+.console-body .gem-b {
+  margin-top: 10px;
+}
+
+.pills {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 92px;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+
+.pill {
+  width: 22px;
+  height: 6px;
+  border-radius: 3px;
+  background: #2a2640;
+  transform: rotate(-24deg);
+  box-shadow: inset 1px 1px 0 #4a4466;
+}
+
+.pill-labels {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 102px;
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  font-size: 3.5px;
+  color: #7a7498;
+}
+
+.grille {
+  position: absolute;
+  right: 22px;
+  top: 112px;
+  display: flex;
+  gap: 4px;
+  transform: rotate(-28deg);
+}
+
+.grille span {
+  width: 3px;
+  height: 26px;
+  border-radius: 2px;
+  background: #2a2640;
+  box-shadow: inset 1px 1px 0 #14121e;
+}

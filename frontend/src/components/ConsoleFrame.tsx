@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { COMPACT_H, CONSOLE_H, CONSOLE_W, useScale } from './useScale'
+import { CONSOLE_H, CONSOLE_W, useScale, VIEW_H } from './useScale'
 
 interface Props {
   children: ReactNode
@@ -10,15 +10,15 @@ interface Props {
 }
 
 /**
- * An original handheld: rounded slate body, a cartridge slot on top, a screen with
- * a bevelled bezel, a rune-shaped D-pad and two gem buttons. No real console's shape or name.
+ * An original handheld lying in front of you: the screen sits where it always has, and
+ * the rest of the body (D-pad, gem buttons, start/select, speaker) runs off the bottom of
+ * the window. Our own shape, buttons and name; no real console's design or branding.
  */
 export function ConsoleFrame({ children, slot, powered = true, badges }: Props) {
-  const { scale, compact } = useScale()
-  const h = compact ? COMPACT_H : CONSOLE_H
+  const scale = useScale()
   return (
-    <div className="console-outer" style={{ width: CONSOLE_W * scale, height: h * scale }}>
-      <div className={`console ${compact ? 'compact' : ''}`} style={{ transform: `scale(${scale})`, height: h }}>
+    <div className="console-outer" style={{ width: CONSOLE_W * scale, height: VIEW_H * scale }}>
+      <div className="console" style={{ transform: `scale(${scale})`, height: CONSOLE_H }}>
         <div className="console-slot">
           <div className="console-slot-mouth" />
           <div id="slot-portal" />
@@ -29,15 +29,29 @@ export function ConsoleFrame({ children, slot, powered = true, badges }: Props) 
           <div className="screen">{children}</div>
           {badges}
         </div>
-        <div className="console-controls">
+        <div className="console-body" aria-hidden="true">
+          <div className="console-brand">CRAM · CARTRIDGE</div>
           <div className="dpad">
             <span className="dpad-h" />
             <span className="dpad-v" />
+            <span className="dpad-hub" />
           </div>
-          <div className="console-brand">CRAM · CARTRIDGE</div>
           <div className="gems">
             <span className="gem gem-b" />
             <span className="gem gem-a" />
+          </div>
+          <div className="pills">
+            <span className="pill" />
+            <span className="pill" />
+          </div>
+          <div className="pill-labels">
+            <span>MAP</span>
+            <span>QUEST</span>
+          </div>
+          <div className="grille">
+            {Array.from({ length: 6 }, (_, i) => (
+              <span key={i} />
+            ))}
           </div>
         </div>
       </div>

@@ -88,25 +88,15 @@ multiple choice. `answer.text` in the response should be the accepted answer.
 
 README.md, under a new "Art and audio" heading:
 
-> All game art (sprites, backgrounds, icons, the console frame) is original and drawn in
-> code in `frontend/src/art/`; nothing is copied from existing games. The designer can
-> replace any sprite by dropping `frontend/src/assets/sprites/<id>.png` (see the
-> `#/gallery` page). Music goes in `frontend/src/assets/music/` by slot name and is
-> played through a retro filter; every track must be licensed for this use and
-> credited below.
+> All game art (sprites, backgrounds, icons, the handheld frame) and all music are
+> original and generated in code: art in `frontend/src/art/`, chiptune songs in
+> `frontend/src/game/songs.ts`, synthesised live with Web Audio. Nothing is copied from
+> existing games or recordings. The designer can replace any sprite by dropping
+> `frontend/src/assets/sprites/<id>.png` (see the `#/gallery` page).
 
-Music credits (titles chosen by the team; files are not in the repo yet, and the licence
-for each must be confirmed before they are added):
-
-| Slot | Track |
-|---|---|
-| title | "The Throne is Mine" by Ruiqi Zhao |
-| level1 (Underground) | "At All Costs" by Dream Cave |
-| level2 (Stormy cave) | "A Sinking Ship" by Wendel Scherer |
-| level3 (Dead forest) | "The End is Nigh" by Max Anson |
-| level4 (Snowy mountain) | "Anomaly" by Christoffer Moe Ditlevsen |
-| level5 (Volcano) | "Howling Hell" by Jon Bjork |
-| summit (also the Retep fight) | "Epic Triumph" by Elm Lake |
+The level tracks the team picked ("The Throne is Mine", "At All Costs", "A Sinking
+Ship", "The End is Nigh", "Anomaly", "Howling Hell", "Epic Triumph") were used only as
+mood references for our own songs; none of them is in the game or the repo.
 
 CLAUDE.md: the "Art: [PENDING ...]" line can become "Art: full-colour pixel art inside
 an original handheld frame, drawn in code (frontend/src/art)".
