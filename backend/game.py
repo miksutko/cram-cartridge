@@ -116,6 +116,7 @@ class Run:
     used: set[str] = field(default_factory=set)
     misses: list[Question] = field(default_factory=list)
     player_name: str = "PLAYER"
+    last_answer: tuple[str, dict] | None = None  # (q_id, response) to replay a duplicate submit
 
     def current_node(self) -> Node | None:
         return next((n for n in self.nodes if n.status == "open"), None)
@@ -470,6 +471,9 @@ def answer(user_id: str, run_id: str, q_id: str, choice: int | None) -> dict:
     with _lock:
         run = _run(run_id, user_id)
         fight = run.fight
+        if run.last_answer and run.last_answer[0] == q_id and (fight is None or not fight.queue
+                                                                or fight.queue[0] != q_id):
+            return run.last_answer[1]  # the same answer sent twice (double click, UI retry): first one counts
         if run.status != "active" or fight is None:
             raise GameError(409, "No fight in progress")
         if not fight.queue or fight.queue[0] != q_id:
@@ -517,7 +521,7 @@ def answer(user_id: str, run_id: str, q_id: str, choice: int | None) -> dict:
                 run_over = _finish(run, "won")
         _save(run)
 
-        return {
+        response = {
             "correct": correct,
             "answer": {"index": fq.answer, "text": fq.choices[fq.answer]},
             "explanation": clean_math(fq.source.explanation),
@@ -530,6 +534,8 @@ def answer(user_id: str, run_id: str, q_id: str, choice: int | None) -> dict:
             "run_status": run.status,
             "run_over": run_over,
         }
+        run.last_answer = (q_id, response)
+        return response
 
 
 def report(user_id: str) -> dict:

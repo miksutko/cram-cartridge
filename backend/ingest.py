@@ -77,20 +77,89 @@ def ai_text(value: Any) -> str:
     return text
 
 
+def _latex_to_symbols(snippet: str) -> str:
+    """The model copies LaTeX (\neg, \to, \forall) into JSON strings. Some of those are even valid
+    JSON escapes (\n, \t, \f), so convert known commands before parsing at all."""
+    return re.sub(r"\\{1,2}([A-Za-z]+)(?![A-Za-z])", lambda m: _LATEX.get(m.group(1), m.group(0)), snippet)
+
+
+def _repair_escapes(snippet: str) -> str:
+    """Escape any backslash that does not start a valid JSON escape."""
+    return re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", snippet)
+
+
+def _escape_inner_quotes(snippet: str) -> str:
+    """Escape quotes inside strings ("follow from "nothing"") that are not JSON structure."""
+    out = []
+    for i, ch in enumerate(snippet):
+        if ch == '"' and (i == 0 or snippet[i - 1] != "\\"):
+            before = snippet[:i].rstrip()[-1:]
+            after = snippet[i + 1:].lstrip()[:1]
+            if before not in ("{", "[", ",", ":") and after not in (":", ",", "}", "]"):
+                out.append('\\"')
+                continue
+        out.append(ch)
+    return "".join(out)
+
+
+def _loads(snippet: str) -> Any:
+    snippet = _latex_to_symbols(snippet)
+    for fix in (lambda x: x, _repair_escapes, lambda x: _escape_inner_quotes(_repair_escapes(x))):
+        try:
+            return json.loads(fix(snippet))
+        except json.JSONDecodeError:
+            continue
+    raise ValueError("unreadable JSON in model reply")
+
+
+def _json_objects(text: str) -> list[str]:
+    """Top-level {...} spans, found by matching braces outside strings."""
+    spans, depth, start, in_str, escaped = [], 0, 0, False, False
+    for i, ch in enumerate(text):
+        if in_str:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_str = False
+        elif ch == '"':
+            in_str = True
+        elif ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}" and depth:
+            depth -= 1
+            if depth == 0:
+                spans.append(text[start:i + 1])
+    return spans
+
+
 def extract_json(text: str, opener: str) -> Any:
     closer = "}" if opener == "{" else "]"
     start, end = text.find(opener), text.rfind(closer)
     if start < 0 or end <= start:
         raise ValueError("no JSON in model reply")
-    snippet = text[start:end + 1]
+    return _loads(text[start:end + 1])
+
+
+def extract_items(text: str) -> list:
+    """The objects in a JSON-array reply, salvaging every one that parses even when the
+    array itself is broken (missing ']', one bad item)."""
     try:
-        return json.loads(snippet)
-    except json.JSONDecodeError:
-        # The model often copies LaTeX (\neg, \leftrightarrow) into JSON strings: an invalid
-        # escape. Turn known commands into symbols, escape any other stray backslash, retry.
-        snippet = re.sub(r"\\{1,2}([A-Za-z]+)(?![A-Za-z])",
-                         lambda m: _LATEX.get(m.group(1), m.group(0)), snippet)
-        return json.loads(re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", snippet))
+        items = extract_json(text, "[")
+        if isinstance(items, list):
+            return items
+    except ValueError:
+        pass
+    items = []
+    for span in _json_objects(text):
+        try:
+            items.append(_loads(span))
+        except ValueError:
+            continue
+    return items
 
 
 _LATEX = {
@@ -174,12 +243,9 @@ def _source(item: dict, prompt: str, answer: str, pages: dict[int, str]) -> tupl
 
 
 def clean_questions(reply: str, pages: dict[int, str]) -> list[dict]:
-    try:
-        items = extract_json(reply or "", "[")
-    except (ValueError, json.JSONDecodeError):
-        return []
+    items = extract_items(reply or "")
     out = []
-    for item in items if isinstance(items, list) else []:
+    for item in items:
         if not isinstance(item, dict):
             continue
         prompt = clean_math(str(item.get("question", ""))).strip()
