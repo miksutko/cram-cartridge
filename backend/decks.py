@@ -159,6 +159,19 @@ def _load_snowflake_deck(deck_id: str) -> Deck | None:
     return Deck(deck_id, name, main_topic or name, "snowflake", subtopics, questions, slides or 0, chunks or 0)
 
 
+def hide_deck(deck_id: str) -> bool:
+    """Take an uploaded cartridge off the shelf. Its rows stay (status 'deleted') so it can be
+    restored; the built-in demos cannot be removed."""
+    if deck_id in _DEMO or not db.configured():
+        return False
+    with db.pooled() as conn, conn.cursor() as cur:
+        cur.execute(q("hide_deck"), {"deck_id": deck_id})
+        changed = cur.rowcount
+    with _cache_lock:
+        _cache.pop(deck_id, None)
+    return bool(changed)
+
+
 def warm_cache() -> None:
     """Load every uploaded cartridge into memory (run in the background at startup)."""
     summaries, _ = list_decks()

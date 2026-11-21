@@ -7,7 +7,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from . import db, game, store
-from .decks import list_decks, warm_cache
+from .decks import hide_deck, list_decks, warm_cache
 from .ingest import MAX_PDF_BYTES, UploadError, ingest
 
 logger = logging.getLogger(__name__)
@@ -78,6 +78,13 @@ def health() -> dict[str, Any]:
 def decks() -> dict[str, Any]:
     items, error = list_decks()
     return {"decks": items, "snowflake_error": error}
+
+
+@app.delete("/api/decks/{deck_id}")
+def delete_deck(deck_id: str) -> dict[str, Any]:
+    if not hide_deck(deck_id):
+        raise HTTPException(status_code=404, detail="That cartridge cannot be removed")
+    return {"ok": True}
 
 
 @app.post("/api/upload")

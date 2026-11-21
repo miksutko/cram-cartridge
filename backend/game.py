@@ -28,9 +28,9 @@ MINIBOSS_QUESTIONS = 3
 BLITZ_QUESTIONS = 4
 BOSS_QUESTIONS = 8
 
-# The judge's climb (name JUDGE, or judge: true): every stop with 1 question, a 3-question
-# dragon, the right answer marked with a dot, and nothing saved.
-JUDGE_NAME = "JUDGE"
+# The demo climb (any cartridge named "Demo: ...", or judge: true on /api/run): every stop with
+# 1 question, a 3-question dragon, the right answer marked with a dot, and nothing saved.
+DEMO_PREFIX = "Demo:"
 JUDGE_MARK = " \u2022"
 JUDGE_COUNTS = {"enemy": 1, "miniboss": 1, "blitz": 1, "boss": 3}
 
@@ -328,7 +328,7 @@ def start_run(user_id: str, deck_id: str, player_name: str | None = None, judge:
     nodes.append(Node("summit", "boss", "summit", SUMMIT[0], SUMMIT[1], None, deck.main_topic))
     nodes[0].status = "open"
     name = (player_name or "").strip()[:20] or "PLAYER"
-    judge = judge or name.upper() == JUDGE_NAME
+    judge = judge or deck.name.startswith(DEMO_PREFIX)
     run = Run(uuid.uuid4().hex, user_id, deck, nodes, player_name=name, judge=judge)
     with _lock:
         _runs[run.run_id] = run

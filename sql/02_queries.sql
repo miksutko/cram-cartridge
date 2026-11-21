@@ -194,3 +194,7 @@ LIMIT 60;
 
 -- name: ready_deck_ids
 SELECT deck_id FROM decks WHERE status = 'ready';
+
+-- name: hide_deck
+-- Taking a cartridge off the shelf keeps its rows (status 'deleted'), so it can be restored.
+UPDATE decks SET status = 'deleted' WHERE deck_id = %(deck_id)s AND status = 'ready';
