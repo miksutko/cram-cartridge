@@ -507,7 +507,8 @@ export const mockBackend: Backend = {
     if (run.status !== 'active' || !f) throw new ApiError(409, 'No fight in progress')
     if (f.queue[0] !== req.q_id) throw new ApiError(409, 'Answer the current question first')
     const fq = f.questions.get(req.q_id)!
-    const timedOut = f.deadline !== null && Date.now() > f.deadline + 300
+    // the server decides; a little tolerance for the client's clock
+    const timedOut = f.deadline !== null && Date.now() > f.deadline - 250
     if (!timedOut && (req.choice === null || req.choice === undefined) && !req.text) {
       if (f.deadline !== null) throw new ApiError(409, 'There is still time')
       throw new ApiError(400, 'Send choice or text')

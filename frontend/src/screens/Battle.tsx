@@ -83,7 +83,7 @@ export function Battle({ userId, run, fight, items: startItems, score: startScor
       sfx('thunder')
       later(() => sfx('roar'), 500)
     } else sfx('levelUp')
-    const id = window.setTimeout(() => setPhase('ask'), isBoss ? 3400 : 1500)
+    const id = window.setTimeout(() => setPhase((p) => (p === 'intro' ? 'ask' : p)), isBoss ? 3400 : 1500)
     return () => window.clearTimeout(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -155,6 +155,7 @@ export function Battle({ userId, run, fight, items: startItems, score: startScor
   async function send(choice: number | null, text: string | null, retry = 0) {
     if (!question || sending.current) return
     sending.current = true
+    setDeadline(null)
     setPhase('pending')
     try {
       const res = await api.answer({ user_id: userId, run_id: run.runId, q_id: question.q_id, choice, text })
@@ -162,9 +163,10 @@ export function Battle({ userId, run, fight, items: startItems, score: startScor
       land(res)
     } catch (err) {
       sending.current = false
-      if (choice === null && text === null && retry < 3) {
-        // timed answer arrived early: ask again shortly
-        later(() => void send(null, null, retry + 1), 400)
+      if (choice === null && text === null) {
+        // Our clock ran out before the server's: ask again shortly, then resync quietly.
+        if (retry < 3) later(() => void send(null, null, retry + 1), 500)
+        else setPhase('ask')
         return
       }
       setError(errorText(err))

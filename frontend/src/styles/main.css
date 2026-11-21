@@ -2225,3 +2225,10 @@ canvas {
 .fighter.enemy.dragon {
   bottom: 60px;
 }
+
+.mock-badge {
+  top: auto;
+  right: auto;
+  left: 10px;
+  bottom: 0;
+}
