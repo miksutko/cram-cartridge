@@ -6,8 +6,11 @@ field or endpoint, and degrades gracefully until then. The mock backend
 (`frontend/src/api/mock.ts`, use `?mock=1`) implements all of it, so it is a working
 reference for the exact shapes.
 
-Already done on the backend (thank you): `GET /api/decks`, `player_name` on
-`POST /api/run`, `GET /api/scores`, `missed_slides` in the report.
+Already done on the backend (thank you), verified end to end with the frontend on
+21 Nov 15:50: `GET /api/decks`, `player_name`, `GET /api/scores`, `missed_slides`,
+regular enemies, treasure (`/api/treasure`), items (`/api/item`), Blitz timing, score and
+`blocked` in answers, and 5 levels. Still open below: **3 (path reason / next[])**,
+**7 (typed answers)** and **8 (trace detail, optional)**.
 
 ## What players see today on the real backend vs the design doc
 
