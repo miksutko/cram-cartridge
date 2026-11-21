@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 from . import db
 from .decks import Deck, Question, get_deck, other_deck_ids
+from .ingest import ai_text, clean_math
 from .queries import q
 
 MAX_HP = 5
@@ -211,8 +212,8 @@ def _fight_question(node: Node, i: int, source: Question, deck: Deck,
         source=source,
         deck_name=deck.name,
         subtopic=deck.subtopic_name(source.subtopic_no),
-        prompt=prompt or source.prompt,
-        choices=[source.choices[j] for j in order],
+        prompt=clean_math(prompt or source.prompt),
+        choices=[clean_math(source.choices[j]) for j in order],
         answer=order.index(source.answer),
         slot=slot,
     )
@@ -225,7 +226,7 @@ def _reword(question: Question, trace: list[dict]) -> str | None:
     try:
         with db.get_connection() as conn, conn.cursor() as cur:
             cur.execute(q("complete"), {"prompt": QUESTION_REWORD_PROMPT + question.prompt})
-            reply = str((cur.fetchone() or [""])[0] or "").strip().strip('"')
+            reply = ai_text((cur.fetchone() or [""])[0]).strip().strip('"')
         trace.append({"fn": "AI_COMPLETE (reword)", "ms": round((time.perf_counter() - start) * 1000), "rows": 1})
         return reply[:300] or None
     except Exception as exc:
@@ -372,7 +373,7 @@ def answer(user_id: str, run_id: str, q_id: str, choice: int | None) -> dict:
             run.misses.append(fq.source)
             fight.queue.append(q_id)  # a missed question comes back at the end of the fight
             taunt = random.choice(taunts["miss"])
-            quote = {"text": fq.source.quote, "page": fq.source.page, "deck_name": fq.deck_name}
+            quote = {"text": clean_math(fq.source.quote), "page": fq.source.page, "deck_name": fq.deck_name}
 
         node_cleared = fight.enemy_hp <= 0
         run_over = None
@@ -390,7 +391,7 @@ def answer(user_id: str, run_id: str, q_id: str, choice: int | None) -> dict:
         return {
             "correct": correct,
             "answer": {"index": fq.answer, "text": fq.choices[fq.answer]},
-            "explanation": fq.source.explanation,
+            "explanation": clean_math(fq.source.explanation),
             "taunt": taunt,
             "quote": quote,
             "player_hp": run.hp,

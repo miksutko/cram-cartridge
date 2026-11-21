@@ -31,8 +31,9 @@ QUESTION_PROMPT = f"""Write {QUESTIONS_PER_SUBTOPIC} multiple-choice quiz questi
 Reply with ONLY a JSON array and no other text. Each item must look exactly like this:
 {{"question": "...", "choices": ["...", "...", "...", "..."], "answer": 0, "explanation": "one sentence", "page": 3, "quote": "..."}}
 Rules:
-- exactly 4 short choices, exactly one correct; "answer" is the 0-based index of the correct choice
-- wrong choices must be plausible
+- exactly 4 short choices; "answer" is the 0-based index of the correct choice
+- exactly ONE choice may be correct: every wrong choice must be clearly false according to the slides
+- wrong choices must still be plausible to someone who did not revise
 - every question must be answerable from the slides alone
 - "page" is the page number shown in [page N] where the answer comes from
 - "quote" is one sentence copied word for word from that page that contains the answer"""
@@ -61,21 +62,79 @@ class Trace:
         })
 
 
+def ai_text(value: Any) -> str:
+    """AI_COMPLETE comes back JSON-encoded (a quoted string); unwrap it to plain text."""
+    text = "" if value is None else str(value)
+    stripped = text.strip()
+    if stripped.startswith('"') and stripped.endswith('"'):
+        try:
+            decoded = json.loads(stripped)
+            if isinstance(decoded, str):
+                return decoded
+        except json.JSONDecodeError:
+            pass
+    return text
+
+
 def extract_json(text: str, opener: str) -> Any:
     closer = "}" if opener == "{" else "]"
     start, end = text.find(opener), text.rfind(closer)
     if start < 0 or end <= start:
         raise ValueError("no JSON in model reply")
-    return json.loads(text[start:end + 1])
+    snippet = text[start:end + 1]
+    try:
+        return json.loads(snippet)
+    except json.JSONDecodeError:
+        # The model often copies LaTeX (\neg, \leftrightarrow) into JSON strings: an invalid
+        # escape. Turn known commands into symbols, escape any other stray backslash, retry.
+        snippet = re.sub(r"\\{1,2}([A-Za-z]+)(?![A-Za-z])",
+                         lambda m: _LATEX.get(m.group(1), m.group(0)), snippet)
+        return json.loads(re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", snippet))
+
+
+_LATEX = {
+    "neg": "¬", "lnot": "¬", "lor": "∨", "vee": "∨", "land": "∧", "wedge": "∧", "to": "→",
+    "rightarrow": "→", "Rightarrow": "⇒", "leftrightarrow": "↔", "Leftrightarrow": "⇔", "models": "⊨",
+    "vDash": "⊨", "vdash": "⊢", "equiv": "≡", "ldots": "…", "dots": "…", "cdots": "…", "in": "∈",
+    "notin": "∉", "cup": "∪", "cap": "∩", "subseteq": "⊆", "subset": "⊂", "emptyset": "∅", "forall": "∀",
+    "exists": "∃", "leq": "≤", "le": "≤", "geq": "≥", "ge": "≥", "neq": "≠", "ne": "≠", "times": "×",
+    "infty": "∞", "top": "⊤", "bot": "⊥", "cdot": "·", "quad": " ", "qquad": " ", "mapsto": "↦",
+    "leftarrow": "←", "Leftarrow": "⇐", "iff": "⇔", "implies": "⇒", "mid": "|", "circ": "∘",
+    "oplus": "⊕", "sim": "~", "prime": "′", "ell": "ℓ", "langle": "⟨", "rangle": "⟩",
+}
+
+
+def clean_math(text: str) -> str:
+    """Turn the LaTeX that AI_PARSE_DOCUMENT emits ($\\neg P \\lor Q$) into readable symbols."""
+    text = re.sub(r"\\(?:mathcal|mathrm|mathbf|mathit|text|operatorname)\{([^{}]*)\}", r"\1", text)
+    text = re.sub(r"\\([A-Za-z]+)(?![A-Za-z])", lambda m: _LATEX.get(m.group(1), m.group(0)), text)
+    text = re.sub(r"[_^]\{([^{}]*)\}", r"\1", text)
+    text = text.replace(r"\{", "{").replace(r"\}", "}").replace("\\,", " ").replace("$", "")
+    return re.sub(r"¬\s+", "¬", text)
+
+
+def _plain(text: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[#*|`>]", " ", clean_math(text or ""))).strip()
 
 
 def _norm(text: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"[#*|`_>]", " ", text)).strip().lower()
+    return _plain(text).lower()
 
 
-def _snippet(content: str, limit: int = 240) -> str:
-    text = re.sub(r"\s+", " ", re.sub(r"[#*|`>]", " ", content)).strip()
+def _trim(text: str, limit: int = 240) -> str:
     return text if len(text) <= limit else text[:limit].rsplit(" ", 1)[0] + "..."
+
+
+def _words(text: str) -> set[str]:
+    return set(re.findall(r"\w+", text.lower()))
+
+
+def _best_sentence(content: str, hint: str) -> str:
+    """The sentence (or line) on a page that shares the most words with the hint."""
+    plain = _plain(content)
+    parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+|\s-\s", plain) if len(p.strip()) > 15] or [plain]
+    wanted = _words(hint)
+    return _trim(max(parts, key=lambda part: len(wanted & _words(part))))
 
 
 def _answer_index(raw: Any, choices: list[str]) -> int | None:
@@ -96,22 +155,21 @@ def _answer_index(raw: Any, choices: list[str]) -> int | None:
 
 
 def _source(item: dict, prompt: str, answer: str, pages: dict[int, str]) -> tuple[int | None, str]:
-    """Return (page, quote) where the quote really appears in the slides."""
-    quote = str(item.get("quote", "")).strip()
+    """Return (page, quote) where the quote really comes from the slides."""
+    quote = _plain(str(item.get("quote", "")))
     page = item.get("page")
     page = int(page) if isinstance(page, (int, str)) and str(page).isdigit() and int(page) in pages else None
     if quote:
-        wanted = _norm(quote)
+        wanted = quote.lower()
         if page and wanted in _norm(pages[page]):
-            return page, quote
+            return page, _trim(quote)
         for no, content in pages.items():
-            if wanted and wanted in _norm(content or ""):
-                return no, quote
-    if page is None:  # fall back to the page sharing the most words with the question
-        words = set(re.findall(r"\w+", f"{prompt} {answer}".lower()))
-        page = max(pages, key=lambda no: len(words & set(re.findall(r"\w+", (pages[no] or "").lower()))),
-                   default=None)
-    return page, _snippet(pages.get(page, "") or "") if page else ""
+            if wanted in _norm(content):
+                return no, _trim(quote)
+    hint = f"{quote} {prompt} {answer}"
+    if page is None:  # the page sharing the most words with the question
+        page = max(pages, key=lambda no: len(_words(hint) & _words(_plain(pages[no]))), default=None)
+    return page, _best_sentence(pages.get(page, ""), hint) if page else ""
 
 
 def clean_questions(reply: str, pages: dict[int, str]) -> list[dict]:
@@ -123,8 +181,8 @@ def clean_questions(reply: str, pages: dict[int, str]) -> list[dict]:
     for item in items if isinstance(items, list) else []:
         if not isinstance(item, dict):
             continue
-        prompt = str(item.get("question", "")).strip()
-        choices = [str(c).strip() for c in item.get("choices", []) if str(c).strip()]
+        prompt = clean_math(str(item.get("question", ""))).strip()
+        choices = [clean_math(str(c)).strip() for c in item.get("choices", []) if str(c).strip()]
         if not prompt or len(choices) != 4 or len({c.lower() for c in choices}) != 4:
             continue
         answer = _answer_index(item.get("answer"), choices)
@@ -135,7 +193,7 @@ def clean_questions(reply: str, pages: dict[int, str]) -> list[dict]:
             "prompt": prompt,
             "choices": choices,
             "answer": answer,
-            "explanation": str(item.get("explanation", "")).strip(),
+            "explanation": clean_math(str(item.get("explanation", ""))).strip(),
             "page": page,
             "quote": quote,
         })
@@ -171,7 +229,7 @@ def ingest(pdf: bytes, name: str) -> dict:
             cur.execute(q("deck_text"), params)
             deck_text = (cur.fetchone() or [""])[0] or ""
             trace.run(cur, "AI_COMPLETE (topics)", q("complete"), {"prompt": TOPIC_PROMPT + deck_text[:15000]})
-            reply = (cur.fetchone() or [""])[0] or ""
+            reply = ai_text((cur.fetchone() or [""])[0])
             try:
                 topics = extract_json(reply, "{")
                 main_topic = str(topics["main_topic"]).strip() or name
@@ -198,7 +256,7 @@ def ingest(pdf: bytes, name: str) -> dict:
 
             question_rows, by_subtopic = [], {}
             for subtopic_no, reply in replies:
-                cleaned = clean_questions(reply, pages)
+                cleaned = clean_questions(ai_text(reply), pages)
                 by_subtopic[int(subtopic_no)] = len(cleaned)
                 for item in cleaned:
                     question_rows.append({
