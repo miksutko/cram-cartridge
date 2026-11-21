@@ -292,22 +292,21 @@ export const retep = build(
     const bolt = pal.char('#e8fcff')
     const boltC = pal.char('#60e0ff')
     const eye = pal.char('#ffe860')
-    const pupil = pal.char('#1a0a00')
     const mouth = pal.char('#14040e')
     const fang = pal.char('#ffffff')
     const b = f % 2 === 1 ? 1 : 0
     const atk = f === 3 ? -4 : 0
     const w = f === 1 ? 2 : f === 2 ? -1 : 0 // wing beat
-    // ---- wing (behind the body): wrist, four fingers, scalloped membrane
-    const wr: [number, number] = [64, 20 + b - w]
-    const tips: [number, number][] = [[61, 5 + b - w * 2], [80, 3 + b - w * 2], [93, 13 + b - w], [95, 35 + b]]
+    // ---- wing (behind the body): raised high and swept back, five fingers, scalloped membrane
+    const wr: [number, number] = [58, 9 + b - w]
+    const tips: [number, number][] = [[50, 1 + b - w * 2], [72, 0 + b - w * 2], [92, 5 + b - w], [95, 28 + b], [90, 47 + b]]
     p.fill(
-      poly([52, 46 + b], [58, 30 + b], wr, tips[0], [70, 15 + b - w], tips[1], [84, 17 + b - w], tips[2], [88, 26 + b], tips[3], [83, 40 + b], [72, 50 + b]),
+      poly([44, 48 + b], [50, 28 + b], wr, tips[0], [61, 8 + b - w], tips[1], [80, 10 + b - w], tips[2], [87, 20 + b], tips[3], [85, 37 + b], tips[4], [70, 54 + b]),
       wing,
     )
-    p.fill(seg(53, 45 + b, wr[0], wr[1], 2.2, 1.6), scale)
-    for (const t of tips) p.fill(seg(wr[0], wr[1], t[0], t[1], 1.1, 0.6), scale, { flat: 'd' })
-    p.dots(tips.map(([x, y]) => [x, y - 1] as [number, number]), horn.l)
+    p.fill(seg(46, 46 + b, wr[0], wr[1], 2.6, 1.8), scale)
+    for (const t of tips) p.fill(seg(wr[0], wr[1], t[0], t[1], 1.2, 0.6), scale, { flat: 'd' })
+    p.dots(tips.map(([x, y]) => [x, Math.max(0, y - 1)] as [number, number]), horn.l)
     // ---- tail
     p.fill(path([[72, 66], [86, 72], [91, 84], [84, 92]], 5.5, 1.8), scale)
     p.fill(poly([84, 89], [76, 94], [86, 95], [90, 90]), belly)
@@ -322,27 +321,20 @@ export const retep = build(
     for (const y of [57, 61, 65, 69]) p.fill(seg(37, y + b, 57, y + b, 0.5), belly, { flat: 'd' })
     for (const x of [50, 58, 66]) p.fill(poly([x - 3, 44 + b], [x, 38 + b], [x + 3, 44 + b]), belly)
     // ---- neck
-    p.fill(path([[42 + atk, 50 + b], [33 + atk, 37 + b], [27 + atk, 27 + b]], 8, 6), scale)
+    p.fill(path([[42 + atk, 50 + b], [32 + atk, 36 + b], [26 + atk, 26 + b]], 8, 6), scale)
     for (const [x, y] of [[36, 46], [31, 39]] as [number, number][]) p.fill(seg(x - 4 + atk, y + 2 + b, x + 1 + atk, y + 4 + b, 0.6), belly, { flat: 'm' })
     // ---- two swept-back horns (the far one first)
     const hx = atk
-    p.fill(path([[22 + hx, 16 + b], [27 + hx, 8 + b], [34 + hx, 3 + b]], 2, 0.6), horn)
-    p.fill(path([[27 + hx, 17 + b], [34 + hx, 10 + b], [42 + hx, 7 + b]], 2.6, 0.7), horn)
-    // ---- head: skull, long snout, open jaw
-    p.fill(ellipse(25 + hx, 22 + b, 9, 7), scale)
-    p.fill(poly([19 + hx, 17 + b], [4 + hx, 21 + b], [3 + hx, 25 + b], [19 + hx, 27 + b]), scale)
-    p.fill(poly([19 + hx, 29 + b], [6 + hx, 29 + b], [8 + hx, 33 + b], [22 + hx, 32 + b]), scale)
-    p.fill(poly([4 + hx, 26 + b], [20 + hx, 27 + b], [20 + hx, 29 + b], [6 + hx, 29 + b]), { o: mouth, d: mouth, m: mouth, l: mouth, h: mouth }, { flat: 'm' })
-    p.dots([[6 + hx, 26 + b], [9 + hx, 27 + b], [12 + hx, 27 + b], [15 + hx, 27 + b]], fang) // upper teeth
-    p.dots([[8 + hx, 28 + b], [11 + hx, 28 + b], [14 + hx, 28 + b]], fang) // lower teeth
-    p.dot(5 + hx, 22 + b, mouth).dot(6 + hx, 22 + b, mouth) // nostril
-    // heavy brow over a glowing slit-pupil eye
-    p.fill(seg(15 + hx, 18 + b, 26 + hx, 16 + b, 1), scale, { flat: 'o' })
-    p.dots([[18 + hx, 19 + b], [19 + hx, 19 + b], [21 + hx, 19 + b], [18 + hx, 20 + b], [19 + hx, 20 + b], [20 + hx, 20 + b], [21 + hx, 20 + b]], eye)
-    p.dots([[20 + hx, 19 + b], [20 + hx, 20 + b]], pupil)
-    // cheek spines
-    p.fill(poly([29 + hx, 25 + b], [36 + hx, 26 + b], [30 + hx, 28 + b]), horn)
-    p.fill(poly([28 + hx, 28 + b], [33 + hx, 32 + b], [27 + hx, 31 + b]), horn)
+    p.fill(path([[19 + hx, 16 + b], [24 + hx, 8 + b], [31 + hx, 3 + b]], 2, 0.6), horn)
+    p.fill(path([[24 + hx, 17 + b], [31 + hx, 10 + b], [39 + hx, 7 + b]], 2.6, 0.7), horn)
+    // ---- head: rounded skull, long snout, open jaw, glowing eye
+    p.fill(ellipse(22 + hx, 22 + b, 10, 7.5), scale)
+    p.fill(poly([14 + hx, 17 + b], [2 + hx, 23 + b], [3 + hx, 27 + b], [16 + hx, 26 + b]), scale)
+    p.fill(poly([15 + hx, 27 + b], [4 + hx, 29 + b], [5 + hx, 32 + b], [18 + hx, 31 + b]), scale)
+    p.fill(rect(4 + hx, 27 + b, 12, 2), { o: mouth, d: mouth, m: mouth, l: mouth, h: mouth }, { flat: 'm' })
+    p.dots([[6 + hx, 27 + b], [9 + hx, 27 + b], [12 + hx, 28 + b], [7 + hx, 28 + b]], fang)
+    p.dot(4 + hx, 23 + b, scale.o)
+    p.dots([[19 + hx, 19 + b], [20 + hx, 19 + b], [21 + hx, 19 + b]], eye).dot(20 + hx, 18 + b, belly.h)
     // ---- fore leg
     p.fill(ellipse(43, 65 + b, 6.5, 7), scale)
     p.fill(path([[42, 68 + b], [39, 79], [37, 87]], 4.4, 3.4), scale)
@@ -353,7 +345,7 @@ export const retep = build(
     const bolts: [number, number][][] = [
       [[34, 52], [40, 56], [38, 60], [46, 62], [44, 68]],
       [[60, 46], [56, 52], [62, 54], [58, 60], [64, 64]],
-      [[74, 22], [70, 28], [76, 30], [70, 38]],
+      [[72, 18], [66, 26], [74, 28], [66, 38]],
       [[56, 66], [60, 70], [56, 72], [62, 76]],
     ]
     for (const pts of [bolts[f % 4], bolts[(f + 2) % 4]]) {
