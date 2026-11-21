@@ -22,6 +22,7 @@ interface Compiled {
   song: Song
   steps: number
   lead: Ev[]
+  harmony: Ev[]
   bass: Ev[]
   drums: string[]
 }
@@ -74,7 +75,8 @@ function compile(name: string): Compiled {
   const song = SONGS[name]
   const { events, steps } = parseLine(song.lead)
   const bars = Math.ceil(steps / 16)
-  const c: Compiled = { song, steps: bars * 16, lead: events, bass: bassFor(song.roots, song.bassStyle, bars), drums: song.drums.split(/\s+/) }
+  const harmony = song.harmony ? parseLine(song.harmony).events : []
+  const c: Compiled = { song, steps: bars * 16, lead: events, harmony, bass: bassFor(song.roots, song.bassStyle, bars), drums: song.drums.split(/\s+/) }
   compiled.set(name, c)
   return c
 }
@@ -203,6 +205,7 @@ function start(slot: MusicSlot): void {
   const p: Playing = { slot, name, bus, timer: 0, nextStep: 0, nextTime: a.currentTime + 0.12 }
   const leadAt = new Map(c.lead.map((e) => [e.step, e]))
   const bassAt = new Map(c.bass.map((e) => [e.step, e]))
+  const harmAt = new Map(c.harmony.map((e) => [e.step, e]))
   const tick = () => {
     while (p.nextTime < a.currentTime + 0.15) {
       if (p.nextStep >= c.steps) {
@@ -215,6 +218,8 @@ function start(slot: MusicSlot): void {
       const s = p.nextStep
       const l = leadAt.get(s)
       if (l) note(a, bus, l.freq, p.nextTime, l.len * stepDur * 0.95, c.song.leadWave, 0.16)
+      const h = harmAt.get(s)
+      if (h) note(a, bus, h.freq, p.nextTime, h.len * stepDur * 0.95, 0.5, 0.07)
       const b = bassAt.get(s)
       if (b) note(a, bus, b.freq, p.nextTime, b.len * stepDur * 0.9, 'bass', 0.22)
       const d = c.drums[s % c.drums.length]
