@@ -2931,3 +2931,40 @@ body,
     transform: translate(-50%, -58px);
   }
 }
+
+/* Taller screen (240x184): the painted scene is 160 high and its ground strip is repeated below,
+   so the question box has room under the fighters. Ground level is now 80px up from the bottom. */
+.screen {
+  height: 184px;
+}
+
+.console-bezel {
+  height: 200px;
+}
+
+.bg {
+  width: 240px;
+  height: 184px;
+}
+
+.bg canvas {
+  width: 240px;
+  height: auto;
+}
+
+.attract-boss,
+.attract-player {
+  bottom: 80px;
+}
+
+.battle .fighter {
+  bottom: calc(80px + var(--lift, 0px));
+}
+
+.battle .fighter.enemy.dragon {
+  bottom: calc(76px + var(--lift, 0px));
+}
+
+.treasure .chest {
+  bottom: 80px;
+}

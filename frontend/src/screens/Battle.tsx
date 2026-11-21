@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import type { RunCtx } from '../App'
 import { api, errorText, Unsupported } from '../api/client'
 import type { AnswerResult, Fight, Item, RunOver } from '../api/types'
-import { biomeOf, GROUND, H } from '../art/backgrounds'
+import { biomeOf, GROUND, SCREEN_H } from '../art/backgrounds'
 import { Sprite } from '../art/Sprite'
 import { Background } from '../components/Background'
 import { QuoteCard } from '../components/QuoteCard'
@@ -73,7 +73,7 @@ export function Battle({ userId, run, fight, items: startItems, score: startScor
       setLift(0)
       return
     }
-    const measure = () => setLift(Math.max(0, Math.round(el.offsetHeight + 6 - (H - GROUND))))
+    const measure = () => setLift(Math.max(0, Math.round(el.offsetHeight + 6 - (SCREEN_H - GROUND))))
     boxObserver.current = new ResizeObserver(measure)
     boxObserver.current.observe(el)
     measure()

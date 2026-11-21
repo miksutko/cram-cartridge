@@ -5,9 +5,9 @@ import { useStore } from '../game/store'
 /** Logical width of the handheld. */
 export const CONSOLE_W = 272
 /** The part that must fit in the window: cartridge slot, bezel and screen. */
-export const VIEW_H = 202
+export const VIEW_H = 226
 /** The whole handheld; everything below VIEW_H simply runs off the bottom of the window. */
-export const CONSOLE_H = 344
+export const CONSOLE_H = 368
 
 function fit(): number {
   const w = window.innerWidth - 8
