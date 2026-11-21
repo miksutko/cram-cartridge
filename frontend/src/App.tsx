@@ -120,8 +120,8 @@ export default function App() {
       setBusy(true)
       setError(null)
       try {
-        const before = await api.report(userId).catch(() => null)
-        const map = await api.startRun(userId, deck.deck_id, playerName())
+        // the report before this run (for the ledger's "since last climb") loads alongside
+        const [before, map] = await Promise.all([api.report(userId).catch(() => null), api.startRun(userId, deck.deck_id, playerName())])
         setRun({ runId: map.run_id, deck, before, quotesSeen: 0, bosses: [], lastLevel: null, started: Date.now() })
         go({ name: 'map' })
       } catch (err) {

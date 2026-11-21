@@ -89,7 +89,7 @@ export function ShelfScreen({ userId, busy, onPlay, onBack, onManual }: Props) {
       {decks === null ? (
         <Loading text="Dusting off the shelf..." />
       ) : (
-        <div className="shelf-row">
+        <div className="shelf-row" style={{ transform: `translateX(${-Math.max(0, Math.min(sel - 2, count - 5)) * 46}px)` }}>
           {decks.map((d, i) => (
             <button
               type="button"
@@ -128,6 +128,7 @@ export function ShelfScreen({ userId, busy, onPlay, onBack, onManual }: Props) {
           {sel < decks.length ? (
             <>
               <div className="msg-title">{decks[sel].name}</div>
+              {decks[sel].main_topic !== decks[sel].name && <div className="dim">{decks[sel].main_topic} · {decks[sel].slides} slides</div>}
               <div className="shelf-levels">
                 {(decks[sel].subtopics ?? []).slice(0, 5).map((s, i) => (
                   <span key={s}>

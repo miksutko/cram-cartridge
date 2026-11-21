@@ -2232,3 +2232,32 @@ canvas {
   left: 10px;
   bottom: 0;
 }
+
+/* shelf: one row that slides to keep the selection in view (5 slots visible) */
+.shelf-row {
+  left: 3px;
+  right: auto;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 6px;
+  overflow: visible;
+  transition: transform 200ms steps(4);
+}
+
+.cart {
+  flex: none;
+}
+
+.cart-topic {
+  font-size: 3.5px;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  max-height: 20px;
+  overflow: hidden;
+}
+
+.cart-topic {
+  word-break: break-all;
+  hyphens: none;
+}
