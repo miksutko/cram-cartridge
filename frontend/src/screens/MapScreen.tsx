@@ -239,7 +239,7 @@ export function MapScreen({ run, onEnter, onShelf, onRunOver }: Props) {
             )
           })}
           {marker && (
-            <div className="map-marker" style={{ left: marker.x - 8, top: marker.y - 26 }}>
+            <div className="map-marker" style={{ left: marker.x - 8, top: marker.y - 19 }}>
               <Sprite id="node-current" />
             </div>
           )}

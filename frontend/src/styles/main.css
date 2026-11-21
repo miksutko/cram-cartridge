@@ -2432,3 +2432,26 @@ body,
   background: #2a2640;
   box-shadow: inset 1px 1px 0 #14121e;
 }
+
+/* Battle: fighters stand on the painted ground (GROUND = 104 of 160, so 56px up). When the
+   question box is taller than that strip, Battle sets --lift and the whole scene (background
+   and fighters) moves up together, so the box never covers anyone and nobody floats. */
+.battle .bg {
+  top: calc(var(--lift, 0px) * -1);
+  transition: top 160ms steps(4);
+}
+
+.battle .fighter {
+  bottom: calc(56px + var(--lift, 0px));
+  transition:
+    bottom 160ms steps(4),
+    transform 120ms steps(2);
+}
+
+.battle .fighter.enemy.dragon {
+  bottom: calc(52px + var(--lift, 0px));
+}
+
+.battle .dmg {
+  margin-top: calc(var(--lift, 0px) * -1);
+}

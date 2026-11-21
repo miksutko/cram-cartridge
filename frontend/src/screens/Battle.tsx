@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import type { RunCtx } from '../App'
 import { api, errorText, Unsupported } from '../api/client'
 import type { AnswerResult, Fight, Item, RunOver } from '../api/types'
-import { biomeOf } from '../art/backgrounds'
+import { biomeOf, GROUND, H } from '../art/backgrounds'
 import { Sprite } from '../art/Sprite'
 import { Background } from '../components/Background'
 import { QuoteCard } from '../components/QuoteCard'
@@ -63,6 +63,21 @@ export function Battle({ userId, run, fight, items: startItems, score: startScor
   const [deadline, setDeadline] = useState<number | null>(null)
   const [now, setNow] = useState(() => performance.now())
   const sending = useRef(false)
+  // Lift the scene when the question box is taller than the strip below the painted ground.
+  const [lift, setLift] = useState(0)
+  const boxObserver = useRef<ResizeObserver | null>(null)
+  const qboxRef = useCallback((el: HTMLDivElement | null) => {
+    boxObserver.current?.disconnect()
+    boxObserver.current = null
+    if (!el) {
+      setLift(0)
+      return
+    }
+    const measure = () => setLift(Math.max(0, Math.round(el.offsetHeight + 6 - (H - GROUND))))
+    boxObserver.current = new ResizeObserver(measure)
+    boxObserver.current.observe(el)
+    measure()
+  }, [])
   const timers = useRef<number[]>([])
   const later = (fn: () => void, ms: number) => timers.current.push(window.setTimeout(fn, ms))
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), [])
@@ -262,7 +277,10 @@ export function Battle({ userId, run, fight, items: startItems, score: startScor
   const dead = phase === 'cleared' || (result?.node_cleared ?? false)
 
   return (
-    <div className={`scr battle ${fx.shake ? 'shake' : ''} ${phase === 'lost' ? 'grey-out' : ''}`}>
+    <div
+      className={`scr battle ${fx.shake ? 'shake' : ''} ${phase === 'lost' ? 'grey-out' : ''}`}
+      style={{ ['--lift' as string]: `${lift}px` }}
+    >
       <Background biome={biome.id} />
 
       {/* HUD */}
@@ -297,7 +315,7 @@ export function Battle({ userId, run, fight, items: startItems, score: startScor
 
       {/* question box */}
       {question && phase !== 'intro' && phase !== 'cleared' && phase !== 'lost' && (
-        <div className="qbox">
+        <div className="qbox" ref={qboxRef}>
           <div className="q-meta">
             <span>{fight.kind === 'blitz' ? 'BLITZ' : isBoss ? 'SUMMIT' : `LV${biome.level}`} · {question.subtopic}</span>
             {question.slot === 'memory' && <span className="tag tag-memory">YOU MISSED THIS</span>}
