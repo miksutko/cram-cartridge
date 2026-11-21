@@ -206,9 +206,10 @@ const PAINT: Record<SceneId, (R: Raster, r: () => number) => void> = {
   l3(R, r) {
     // Dead forest under the moon.
     R.gradient(0, 110, ['#0a0e0c', '#141e1a', '#22302a', '#34443a'])
-    R.glow(186, 28, 26, '#c8d8c0', 0.5)
-    for (let y = -10; y <= 10; y++) for (let x = -10; x <= 10; x++) if (x * x + y * y <= 100) R.set(186 + x, 28 + y, hex(x * x + y * y > 70 ? '#b4c4ac' : '#dce8d4'))
-    R.rect(181, 24, 3, 2, hex('#b4c4ac'))
+    // the moon sits between the fighters, clear of the boss's head
+    R.glow(104, 26, 24, '#c8d8c0', 0.5)
+    for (let y = -9; y <= 9; y++) for (let x = -9; x <= 9; x++) if (x * x + y * y <= 81) R.set(104 + x, 26 + y, hex(x * x + y * y > 56 ? '#b4c4ac' : '#dce8d4'))
+    for (const [cx, cy] of [[101, 23], [107, 29], [106, 22]] as [number, number][]) R.set(cx, cy, hex('#b4c4ac'))
     R.ridge(waves(r, 80, 5), '#18221c', '#22302a', 3)
     for (let i = 0; i < 9; i++) tree(R, r, 10 + i * 27 + r() * 10, 86, 34 + r() * 18, '#101612')
     R.ridge(waves(r, 92, 2), '#141a14', '#1e281e', 2)
