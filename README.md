@@ -1,67 +1,191 @@
-# Cram Cartridge
+<h1 align="center">🎮 Cram Cartridge</h1>
 
-Built with JetBrains Air (Claude Code and Junie agents)
+<p align="center">
+  <b>Your lecture slides, turned into a retro boss rush.</b><br>
+  Upload a PDF, climb a pixel-art mountain, and fight monsters that quote the exact slide you got wrong.
+</p>
 
-Upload your lecture slides and they become a game cartridge: a pixel-art climb up a mountain with
-one level per topic of the lecture. Every attack is a question written from your own slides. Get one
-wrong and the monster quotes the exact slide you missed, with its page number. The dragon at the
-summit opens with a reworded version of your latest mistake, then hits you with the questions from
-your *other* lectures that are closest in meaning to it.
+<p align="center">
+  <img alt="Snowflake Cortex AI" src="https://img.shields.io/badge/Snowflake-Cortex%20AI-29B5E8?logo=snowflake&logoColor=white">
+  <img alt="React + TypeScript" src="https://img.shields.io/badge/React-TypeScript-61DAFB?logo=react&logoColor=black">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-Python-009688?logo=fastapi&logoColor=white">
+  <img alt="Built with JetBrains Air" src="https://img.shields.io/badge/Built%20with-JetBrains%20Air-000000?logo=jetbrains&logoColor=white">
+  <img alt="KCL Tech First Year Hack" src="https://img.shields.io/badge/KCL%20Tech-First%20Year%20Hack-ffd166">
+  <img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-lightgrey">
+</p>
+
+<p align="center">
+  <img src="docs/img/hero.png" alt="A fight in Cram Cartridge" width="85%">
+</p>
+
+<p align="center">
+  <b>Built with JetBrains Air (Claude Code and Junie agents)</b><br>
+  🎬 <a href="#">Demo video</a> (coming soon)
+</p>
+
+---
+
+## The idea
+
+Re-reading slides the night before an exam doesn't stick. Cram Cartridge turns each lecture into a
+game cartridge. Every topic in the lecture becomes a level, every attack is a question written from
+**your own slides**, and every mistake shows you **the exact slide sentence you missed**, page number
+included. At the summit, the dragon remembers your latest mistake and pulls in the questions from your
+*other* lectures that are closest to it in meaning, so you revise across the course, not one deck at
+a time.
+
+All the AI runs inside **Snowflake**: reading the PDF, chunking, embeddings, question writing and
+vector search are SQL functions next to the data.
+
+## A run, step by step
+
+### 1. Forge a cartridge
+
+Drop in a lecture PDF. Snowflake reads every page, splits it into chunks, finds the main topic and
+3 to 5 subtopics, and writes multiple-choice questions for each one, each tied to the slide it came
+from. A 45-page lecture takes about a minute.
+
+<p align="center"><img src="docs/img/forge.png" alt="Uploading a lecture PDF" width="75%"></p>
+
+### 2. Pick it from the shelf
+
+Your uploaded lectures sit next to two built-in demo cartridges.
+
+<p align="center"><img src="docs/img/shelf.png" alt="The cartridge shelf" width="75%"></p>
+
+### 3. Climb the mountain
+
+One level per subtopic, each a biome with its own mini boss, and the dragon at the summit.
+
+| Level | Biome | Boss |
+|---|---|---|
+| 1 | Underground | Minotaur |
+| 2 | Stormy cave | Kraken |
+| 3 | Dead forest | Forest beast |
+| Summit | Cloudy summit | The dragon |
+
+<p align="center"><img src="docs/img/map.png" alt="The mountain map" width="75%"></p>
+
+### 4. Every attack is a question from your slides
 
 | | |
 |---|---|
-| ![Start screen](docs/img/start.png) | ![A question from the slides](docs/img/battle.png) |
-| ![The slide you missed](docs/img/slide-quote.png) | ![The dragon remembers your mistake](docs/img/dragon-memory.png) |
+| <img src="docs/img/start.png" alt="Start screen"> | <img src="docs/img/battle.png" alt="A question in battle"> |
+| Start screen | Answer to strike; miss and the boss hits back |
 
-Demo video: *coming soon*
+### 5. Miss, and the boss quotes the slide you missed
 
-## How it uses Snowflake
+The quote card shows the slide sentence the question came from, its page, the right answer and a
+one-line explanation. A missed question comes back before the fight ends.
 
-The whole AI pipeline runs inside Snowflake as SQL: `AI_PARSE_DOCUMENT` reads the PDF,
-`SPLIT_TEXT_RECURSIVE_CHARACTER` chunks it, `AI_EMBED` embeds it, `AI_COMPLETE` (llama3.1-70b)
-finds the topics and writes the questions, and `VECTOR_COSINE_SIMILARITY` sorts chunks into levels
-and lets the dragon pick questions from other lectures by meaning. Answers, high scores and runs are
-saved in Snowflake too, so your weak spots follow you between lectures and survive a restart.
+<p align="center"><img src="docs/img/slide-quote.png" alt="The slide you missed" width="75%"></p>
 
-Full walkthrough with timings: [SNOWFLAKE_FLOW.md](SNOWFLAKE_FLOW.md).
+### 6. The dragon remembers
+
+The summit fight opens with a **reworded version of your latest mistake**. Its next two questions
+come from **your other lectures**: Snowflake ranks every question on every cartridge by cosine
+similarity to that mistake and brings in the closest ones, score shown.
+
+| | |
+|---|---|
+| <img src="docs/img/dragon-memory.png" alt="The dragon rewords your latest mistake"> | <img src="docs/img/other-lecture.png" alt="A question from another lecture with its similarity score"> |
+| "You missed this": your mistake, reworded | Closest question from another lecture |
+
+### 7. Results, weak spots and high scores
+
+Score, accuracy, time and bosses beaten, then your weakest subtopics with the slides you miss most.
+Climb again and those weak spots come first.
+
+| | | |
+|---|---|---|
+| <img src="docs/img/results.png" alt="Results"> | <img src="docs/img/weak-spots.png" alt="Weak spots"> | <img src="docs/img/high-scores.png" alt="High scores"> |
+| Results | Weak spots | High scores |
+
+## Powered by Snowflake
+
+Every AI step is a Snowflake SQL function. The backend only moves rows and checks the model's output.
+
+| Step | Snowflake |
+|---|---|
+| Store the PDF | `PUT` to a server-side encrypted stage |
+| Read every page, tables and maths included | `AI_PARSE_DOCUMENT` (layout mode, one row per page) |
+| Chunk the text | `SPLIT_TEXT_RECURSIVE_CHARACTER` |
+| Embed chunks, subtopics and questions | `AI_EMBED` with `snowflake-arctic-embed-l-v2.0` (1024 dimensions) |
+| Find the topics, write the questions, reword your mistake | `AI_COMPLETE` with `llama3.1-70b` |
+| Sort chunks into levels; pick the dragon's questions | `VECTOR_COSINE_SIMILARITY` |
+| Remember answers, scores and runs | plain tables, so weak spots and high scores survive a restart |
+
+```mermaid
+flowchart LR
+  UI[React game] -->|/api| API[FastAPI backend]
+  API -->|bound-parameter SQL| SF[(Snowflake)]
+  SF --- STAGE[@slides stage]
+  SF --- TABLES[decks · slides · chunks · subtopics · questions · attempts · scores · runs]
+  SF --- AI[AI_PARSE_DOCUMENT · SPLIT_TEXT · AI_EMBED · AI_COMPLETE · VECTOR_COSINE_SIMILARITY]
+```
+
+Every response that touches Snowflake carries a `trace`: each function called, how long it took and,
+for the dragon, the cosine scores. The game shows it in the Snowflake panel.
+
+<p align="center"><img src="docs/img/snowflake-panel.png" alt="The Snowflake panel" width="75%"></p>
+
+The full pipeline, with real timings: **[SNOWFLAKE_FLOW.md](SNOWFLAKE_FLOW.md)**.
 
 ## Built with JetBrains Air
 
-Two people, two laptops, two JetBrains Air agent sessions, one repo. The shared agent rules live in
-[`CLAUDE.md`](CLAUDE.md), [`AGENTS.md`](AGENTS.md) and [`.junie/guidelines.md`](.junie/guidelines.md)
-(same content): ownership of each folder, the API contract between frontend and backend, and the
-rules every agent follows. Every commit made through Air starts with `Air:`.
+Two people, two laptops, two JetBrains Air agent sessions, one repo. The agents share one set of
+rules in [`CLAUDE.md`](CLAUDE.md), [`AGENTS.md`](AGENTS.md) and [`.junie/guidelines.md`](.junie/guidelines.md)
+(same content): who owns which folder, the API contract between frontend and backend, and the rules
+every agent follows, such as bound SQL parameters only and never sending the answer to the browser
+early. Every commit made through Air starts with `Air:`.
 
-## Stack
+## Run it locally
 
-- `frontend/`: React + TypeScript + Vite, plain CSS, original pixel art
-- `backend/`: Python, FastAPI, snowflake-connector-python
-- `sql/`: all Snowflake SQL (schema and every query the backend runs)
+**Snowflake (once).** In a Snowsight worksheet, run the first two statements of
+[`sql/00_smoke_test.sql`](sql/00_smoke_test.sql) to create the `CRAM_WH` warehouse and `CRAM`
+database. The backend creates its tables on first start.
 
-## Running locally
+**Backend** (Python 3.11+, from the repo root):
 
-Snowflake (once, in a Snowsight worksheet): run the first two statements of
-[`sql/00_smoke_test.sql`](sql/00_smoke_test.sql) to create the `CRAM_WH` warehouse and the `CRAM`
-database. The backend creates its tables itself on first start.
-
-Backend (Python 3.11+, run from the repo root):
-
-```
+```bash
 python3 -m venv backend/.venv
 source backend/.venv/bin/activate      # Windows: backend\.venv\Scripts\activate
 pip install -r backend/requirements.txt
-cp .env.example .env                    # then fill in the Snowflake values
+cp .env.example .env                    # fill in your Snowflake account, user, password, role
 uvicorn backend.main:app --reload --port 8000
 ```
 
-Frontend:
+**Frontend:**
 
-```
+```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Open the URL Vite prints (usually http://localhost:5173). Requests to `/api` are proxied to the
-backend on port 8000. Two demo cartridges are built in, so the game is playable before Snowflake is
-set up; uploading your own PDF needs Snowflake.
+Open http://localhost:5173. The two demo cartridges work without Snowflake; uploading your own
+lectures needs it.
+
+## Repository layout
+
+```
+frontend/   React + TypeScript + Vite game, plain CSS, original pixel art
+backend/    FastAPI: upload pipeline, game state, Snowflake access
+sql/        every Snowflake statement: schema (01_ingest.sql) and queries (02_queries.sql)
+docs/img/   screenshots for this README
+```
+
+## What's next
+
+- Treasure rooms and power-ups, Blitz rounds and typed answers (the screens exist; the backend comes next)
+- Levels 4 and 5 (Snowy mountain with the Yeti, Volcano with the Phoenix)
+- Branching paths picked by how well you are doing
+
+## Team
+
+- Backend and Snowflake: *add name*
+- Frontend and pixel art: *add name*
+
+## Licence
+
+[MIT](LICENSE)
