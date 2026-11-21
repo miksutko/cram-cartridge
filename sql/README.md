@@ -1,1 +1,1 @@
-Snowflake SQL goes here (owned by person B)
+Snowflake SQL goes here (owned by Maksym)
