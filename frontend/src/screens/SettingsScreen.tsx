@@ -27,7 +27,7 @@ export function SettingsScreen({ onBack, onChangeName }: { onBack: () => void; o
     if (r.act) r.act()
     else r.adj?.(d)
   }
-  const [sel, setSel] = useMenu(rows.length, (i) => run(i), true)
+  const [sel, setSel] = useMenu(rows.length, (i) => run(i), true, 0, true)
   useKeys({
     ArrowLeft: () => rows[sel].adj && run(sel, -1),
     ArrowRight: () => rows[sel].adj && run(sel, 1),

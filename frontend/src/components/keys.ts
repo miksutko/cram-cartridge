@@ -23,7 +23,7 @@ export function useKeys(map: Record<string, (e: KeyboardEvent) => void>, enabled
 }
 
 /** A vertical menu driven by arrows / WASD + Enter. */
-export function useMenu(count: number, onPick: (i: number) => void, enabled = true, initial = 0) {
+export function useMenu(count: number, onPick: (i: number) => void, enabled = true, initial = 0, vertical = false) {
   const [i, setI] = useState(initial)
   const up = () => setI((k) => (k + count - 1) % Math.max(count, 1))
   const down = () => setI((k) => (k + 1) % Math.max(count, 1))
@@ -31,12 +31,9 @@ export function useMenu(count: number, onPick: (i: number) => void, enabled = tr
     {
       ArrowUp: up,
       w: up,
-      ArrowLeft: up,
-      a: up,
+      ...(vertical ? {} : { ArrowLeft: up, a: up, ArrowRight: down, d: down }),
       ArrowDown: down,
       s: down,
-      ArrowRight: down,
-      d: down,
       Enter: () => onPick(i),
       ' ': () => onPick(i),
     },

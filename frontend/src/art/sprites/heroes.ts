@@ -1,4 +1,4 @@
-import { build, ellipse, path, poly, rect, seg, union } from '../pixel'
+import { build, ellipse, path, poly, rect, seg } from '../pixel'
 
 // Ramps are [outline, dark, mid, light, highlight]; light comes from the top-left.
 
@@ -278,7 +278,7 @@ export const phoenix = build(
   { idle: [0, 1, 0, 2], attack: [1], hurt: [2] },
 )
 
-/** Retep, the Final Storm: violet and storm-blue scales, a crown of horns, storm-cloud wings and lightning. 96x96. */
+/** Retep, the Final Storm: violet and storm-blue scales, two swept horns, storm-membrane wings, lightning. 96x96. */
 export const retep = build(
   'retep',
   96,
@@ -286,63 +286,77 @@ export const retep = build(
   4,
   (p, pal, f) => {
     const scale = pal.mat(['#140a2e', '#2e1a6a', '#4a2a9e', '#6e4ad0', '#a888f4'])
-    const gold = pal.mat(['#06183a', '#1a4a8e', '#2a78c8', '#5ab4f0', '#b4ecff'])
+    const belly = pal.mat(['#06183a', '#1a4a8e', '#2a78c8', '#5ab4f0', '#b4ecff'])
     const horn = pal.mat(['#2a2010', '#a08040', '#d8b860', '#f0dc90', '#fffbe0'])
-    const cloud = pal.mat(['#0c0e24', '#262a54', '#3e4478', '#5e66a4', '#8e98d0'])
+    const wing = pal.mat(['#0c0e24', '#232a5a', '#353f80', '#4e5ca8', '#7a8ad0'])
     const bolt = pal.char('#e8fcff')
     const boltC = pal.char('#60e0ff')
     const eye = pal.char('#ffe860')
-    const mouth = pal.char('#1a0204')
+    const pupil = pal.char('#1a0a00')
+    const mouth = pal.char('#14040e')
     const fang = pal.char('#ffffff')
     const b = f % 2 === 1 ? 1 : 0
     const atk = f === 3 ? -4 : 0
-    // storm-cloud wings
-    p.fill(union(ellipse(62, 24 + b, 16, 12), ellipse(77, 32 + b, 14, 11), ellipse(52, 32 + b, 12, 10), ellipse(84, 18 + b, 10, 9), ellipse(68, 12 + b, 11, 8), ellipse(88, 40 + b, 7, 6)), cloud)
-    for (const [x1, y1] of [[68, 4], [86, 12], [92, 34]] as [number, number][]) p.fill(seg(54, 42, x1, y1 + b, 1.4, 0.8), scale, { flat: 'd' })
-    // tail
+    const w = f === 1 ? 2 : f === 2 ? -1 : 0 // wing beat
+    // ---- wing (behind the body): wrist, four fingers, scalloped membrane
+    const wr: [number, number] = [64, 20 + b - w]
+    const tips: [number, number][] = [[61, 5 + b - w * 2], [80, 3 + b - w * 2], [93, 13 + b - w], [95, 35 + b]]
+    p.fill(
+      poly([52, 46 + b], [58, 30 + b], wr, tips[0], [70, 15 + b - w], tips[1], [84, 17 + b - w], tips[2], [88, 26 + b], tips[3], [83, 40 + b], [72, 50 + b]),
+      wing,
+    )
+    p.fill(seg(53, 45 + b, wr[0], wr[1], 2.2, 1.6), scale)
+    for (const t of tips) p.fill(seg(wr[0], wr[1], t[0], t[1], 1.1, 0.6), scale, { flat: 'd' })
+    p.dots(tips.map(([x, y]) => [x, y - 1] as [number, number]), horn.l)
+    // ---- tail
     p.fill(path([[72, 66], [86, 72], [91, 84], [84, 92]], 5.5, 1.8), scale)
-    p.fill(poly([84, 89], [76, 94], [86, 95], [90, 90]), gold)
-    // hind leg: thick thigh, angled shin, a planted foot with three claws
+    p.fill(poly([84, 89], [76, 94], [86, 95], [90, 90]), belly)
+    // ---- hind leg
     p.fill(ellipse(67, 69, 10, 11), scale)
     p.fill(path([[70, 74], [74, 82], [71, 88]], 4.6, 3.6), scale)
-    p.fill(poly([62, 87], [76, 86], [78, 91], [60, 91]), scale, { edge: false })
+    p.fill(poly([62, 87], [76, 86], [78, 91], [60, 91]), scale)
     p.dots([[59, 91], [62, 91], [65, 91]], horn.l).dots([[59, 90], [62, 90], [65, 90]], horn.m)
-    // body and belly plates
+    // ---- body, belly plates, spine
     p.fill(ellipse(54, 58 + b, 22, 16), scale)
-    p.fill(ellipse(47, 63 + b, 13, 9), gold)
-    for (const y of [57, 61, 65, 69]) p.fill(seg(37, y + b, 57, y + b, 0.5), gold, { flat: 'd' })
-    // spine ridge
-    for (const x of [50, 58, 66]) p.fill(poly([x - 3, 44 + b], [x, 37 + b], [x + 3, 44 + b]), gold)
-    // neck and head
-    p.fill(path([[42 + atk, 50 + b], [32 + atk, 36 + b], [26 + atk, 26 + b]], 8, 6), scale)
-    for (const [x, y] of [[36, 46], [31, 39]] as [number, number][]) p.fill(seg(x - 4 + atk, y + 2 + b, x + 1 + atk, y + 4 + b, 0.6), gold, { flat: 'm' })
-    p.fill(ellipse(22 + atk, 22 + b, 10, 7.5), scale)
-    p.fill(poly([14 + atk, 17 + b], [2 + atk, 23 + b], [3 + atk, 27 + b], [16 + atk, 26 + b]), scale)
-    p.fill(poly([15 + atk, 27 + b], [4 + atk, 29 + b], [5 + atk, 32 + b], [18 + atk, 31 + b]), scale)
-    p.fill(rect(4 + atk, 27 + b, 12, 2), { o: mouth, d: mouth, m: mouth, l: mouth, h: mouth }, { flat: 'm' })
-    p.dots([[6 + atk, 27 + b], [9 + atk, 27 + b], [12 + atk, 28 + b], [7 + atk, 28 + b]], fang)
-    p.dot(4 + atk, 23 + b, scale.o)
-    p.dots([[19 + atk, 19 + b], [20 + atk, 19 + b], [21 + atk, 19 + b]], eye).dot(20 + atk, 18 + b, gold.h)
-    // crown of horns
-    p.fill(path([[19 + atk, 15 + b], [13 + atk, 8 + b], [9 + atk, 3 + b]], 2, 0.7), horn)
-    p.fill(path([[23 + atk, 15 + b], [21 + atk, 6 + b], [22 + atk, 0 + b]], 2, 0.7), horn)
-    p.fill(path([[27 + atk, 16 + b], [31 + atk, 7 + b], [36 + atk, 2 + b]], 2.2, 0.7), horn)
-    p.fill(path([[30 + atk, 19 + b], [37 + atk, 14 + b], [42 + atk, 12 + b]], 1.8, 0.6), horn)
-    // fore leg: shoulder, forearm and a planted foot on the same ground line as the hind foot
+    p.fill(ellipse(47, 63 + b, 13, 9), belly)
+    for (const y of [57, 61, 65, 69]) p.fill(seg(37, y + b, 57, y + b, 0.5), belly, { flat: 'd' })
+    for (const x of [50, 58, 66]) p.fill(poly([x - 3, 44 + b], [x, 38 + b], [x + 3, 44 + b]), belly)
+    // ---- neck
+    p.fill(path([[42 + atk, 50 + b], [33 + atk, 37 + b], [27 + atk, 27 + b]], 8, 6), scale)
+    for (const [x, y] of [[36, 46], [31, 39]] as [number, number][]) p.fill(seg(x - 4 + atk, y + 2 + b, x + 1 + atk, y + 4 + b, 0.6), belly, { flat: 'm' })
+    // ---- two swept-back horns (the far one first)
+    const hx = atk
+    p.fill(path([[22 + hx, 16 + b], [27 + hx, 8 + b], [34 + hx, 3 + b]], 2, 0.6), horn)
+    p.fill(path([[27 + hx, 17 + b], [34 + hx, 10 + b], [42 + hx, 7 + b]], 2.6, 0.7), horn)
+    // ---- head: skull, long snout, open jaw
+    p.fill(ellipse(25 + hx, 22 + b, 9, 7), scale)
+    p.fill(poly([19 + hx, 17 + b], [4 + hx, 21 + b], [3 + hx, 25 + b], [19 + hx, 27 + b]), scale)
+    p.fill(poly([19 + hx, 29 + b], [6 + hx, 29 + b], [8 + hx, 33 + b], [22 + hx, 32 + b]), scale)
+    p.fill(poly([4 + hx, 26 + b], [20 + hx, 27 + b], [20 + hx, 29 + b], [6 + hx, 29 + b]), { o: mouth, d: mouth, m: mouth, l: mouth, h: mouth }, { flat: 'm' })
+    p.dots([[6 + hx, 26 + b], [9 + hx, 27 + b], [12 + hx, 27 + b], [15 + hx, 27 + b]], fang) // upper teeth
+    p.dots([[8 + hx, 28 + b], [11 + hx, 28 + b], [14 + hx, 28 + b]], fang) // lower teeth
+    p.dot(5 + hx, 22 + b, mouth).dot(6 + hx, 22 + b, mouth) // nostril
+    // heavy brow over a glowing slit-pupil eye
+    p.fill(seg(15 + hx, 18 + b, 26 + hx, 16 + b, 1), scale, { flat: 'o' })
+    p.dots([[18 + hx, 19 + b], [19 + hx, 19 + b], [21 + hx, 19 + b], [18 + hx, 20 + b], [19 + hx, 20 + b], [20 + hx, 20 + b], [21 + hx, 20 + b]], eye)
+    p.dots([[20 + hx, 19 + b], [20 + hx, 20 + b]], pupil)
+    // cheek spines
+    p.fill(poly([29 + hx, 25 + b], [36 + hx, 26 + b], [30 + hx, 28 + b]), horn)
+    p.fill(poly([28 + hx, 28 + b], [33 + hx, 32 + b], [27 + hx, 31 + b]), horn)
+    // ---- fore leg
     p.fill(ellipse(43, 65 + b, 6.5, 7), scale)
     p.fill(path([[42, 68 + b], [39, 79], [37, 87]], 4.4, 3.4), scale)
     p.fill(poly([29, 87], [42, 86], [43, 91], [27, 91]), scale)
     p.dots([[26, 91], [29, 91], [32, 91]], horn.l).dots([[26, 90], [29, 90], [32, 90]], horn.m)
     p.outline().clean()
-    // lightning flickers along the body (different every frame)
+    // ---- lightning flickers along the body and wing (different every frame)
     const bolts: [number, number][][] = [
       [[34, 52], [40, 56], [38, 60], [46, 62], [44, 68]],
       [[60, 46], [56, 52], [62, 54], [58, 60], [64, 64]],
-      [[70, 26], [64, 30], [70, 32], [62, 38]],
+      [[74, 22], [70, 28], [76, 30], [70, 38]],
       [[56, 66], [60, 70], [56, 72], [62, 76]],
     ]
-    const pick = [bolts[f % 4], bolts[(f + 2) % 4]]
-    for (const pts of pick) {
+    for (const pts of [bolts[f % 4], bolts[(f + 2) % 4]]) {
       for (let i = 0; i < pts.length - 1; i++) {
         const [x0, y0] = pts[i]
         const [x1, y1] = pts[i + 1]
