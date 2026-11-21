@@ -130,13 +130,6 @@ def get_deck(deck_id: str) -> Deck | None:
     return deck
 
 
-def other_deck_ids(deck_id: str) -> list[str]:
-    ids = [d_id for d_id in _DEMO if d_id != deck_id]
-    with _cache_lock:
-        ids += [d_id for d_id in _cache if d_id != deck_id]
-    return ids
-
-
 def _load_snowflake_deck(deck_id: str) -> Deck | None:
     params = {"deck_id": deck_id}
     with db.get_connection() as conn, conn.cursor() as cur:

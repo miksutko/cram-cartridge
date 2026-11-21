@@ -1,16 +1,18 @@
 """Run state for the MVP climb. The server owns all state and timing; the UI only displays it.
 
-Runs and answer history live in memory for the alpha (they reset when the server restarts).
+Runs, answers and scores are served from memory and written to Snowflake in the background
+(backend/store.py). After a restart they are read back from Snowflake on first use.
 """
 
+import json
 import random
 import threading
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
-from . import db
-from .decks import Deck, Question, get_deck, other_deck_ids
+from . import db, store
+from .decks import Deck, Question, get_deck, list_decks
 from .ingest import ai_text, clean_math
 from .queries import q
 
@@ -113,6 +115,7 @@ class Run:
     correct: int = 0
     used: set[str] = field(default_factory=set)
     misses: list[Question] = field(default_factory=list)
+    player_name: str = "PLAYER"
 
     def current_node(self) -> Node | None:
         return next((n for n in self.nodes if n.status == "open"), None)
@@ -128,12 +131,101 @@ class Attempt:
     subtopic: str
     correct: bool
     at: float
+    page: int | None = None
+    quote: str = ""
 
 
 _lock = threading.RLock()
 _runs: dict[str, Run] = {}
 _attempts: list[Attempt] = []
-_scores: dict[str, list[int]] = {}
+_scores: dict[str, list[int]] = {}  # user_id -> scores
+_recent_scores: dict[str, list[dict]] = {}  # deck_id -> rows not yet confirmed in Snowflake
+_loaded_users: set[str] = set()
+
+
+def _question(q_id: str) -> Question | None:
+    deck = get_deck(q_id.rsplit(":", 1)[0])
+    return next((x for x in deck.questions if x.q_id == q_id), None) if deck else None
+
+
+def _ensure_user(user_id: str) -> None:
+    """Load this player's history from Snowflake once per process (before any new answer)."""
+    with _lock:
+        if user_id in _loaded_users:
+            return
+    attempts = store.read("user_attempts", {"user_id": user_id})
+    scores = store.read("user_scores", {"user_id": user_id})
+    with _lock:
+        if user_id in _loaded_users:
+            return
+        _loaded_users.add(user_id)
+        _attempts[:0] = [
+            Attempt(user_id, q_id, deck_id, deck_name or "", int(sub or 0), subtopic or "", bool(correct),
+                    float(at), int(page) if page is not None else None, quote or "")
+            for q_id, deck_id, deck_name, sub, subtopic, correct, page, quote, at in attempts
+        ]
+        _scores.setdefault(user_id, [])[:0] = [int(row[0]) for row in scores]
+
+
+def _snapshot(run: Run) -> str:
+    fight = run.fight
+    return json.dumps({
+        "run_id": run.run_id, "user_id": run.user_id, "deck_id": run.deck.deck_id,
+        "player_name": run.player_name, "nodes": [asdict(n) for n in run.nodes], "hp": run.hp,
+        "max_hp": run.max_hp, "status": run.status, "started_at": run.started_at, "ended_at": run.ended_at,
+        "answered": run.answered, "correct": run.correct, "used": sorted(run.used),
+        "misses": [m.q_id for m in run.misses],
+        "fight": None if fight is None else {
+            "node_id": fight.node.node_id, "queue": fight.queue, "enemy_hp": fight.enemy_hp,
+            "enemy_max_hp": fight.enemy_max_hp, "trace": fight.trace,
+            "questions": [{"q_id": fq.q_id, "source": fq.source.q_id, "deck_name": fq.deck_name,
+                           "subtopic": fq.subtopic, "prompt": fq.prompt, "choices": fq.choices,
+                           "answer": fq.answer, "slot": fq.slot} for fq in fight.questions.values()],
+        },
+    })
+
+
+def _restore(state: dict) -> Run | None:
+    deck = get_deck(state["deck_id"])
+    if deck is None:
+        return None
+    nodes = [Node(**n) for n in state["nodes"]]
+    run = Run(
+        state["run_id"], state["user_id"], deck, nodes, hp=state["hp"], max_hp=state["max_hp"],
+        status=state["status"], started_at=state["started_at"], ended_at=state["ended_at"],
+        answered=state["answered"], correct=state["correct"], used=set(state["used"]),
+        misses=[m for m in (_question(x) for x in state["misses"]) if m],
+        player_name=state.get("player_name") or "PLAYER",
+    )
+    saved = state.get("fight")
+    node = next((n for n in nodes if saved and n.node_id == saved["node_id"]), None)
+    if saved and node:
+        questions = {}
+        for item in saved["questions"]:
+            source = _question(item["source"])
+            if source is None:
+                return run  # the fight cannot be rebuilt; re-entering the node starts a fresh one
+            questions[item["q_id"]] = FightQuestion(item["q_id"], source, item["deck_name"], item["subtopic"],
+                                                    item["prompt"], item["choices"], item["answer"], item["slot"])
+        run.fight = Fight(node, questions, saved["queue"], saved["enemy_hp"], saved["enemy_max_hp"], saved["trace"])
+    return run
+
+
+def _save(run: Run) -> None:
+    store.write("save_run", {"run_id": run.run_id, "user_id": run.user_id, "deck_id": run.deck.deck_id,
+                             "state_json": _snapshot(run)})
+
+
+def _ensure_run(run_id: str) -> None:
+    """After a restart, bring a run back from its Snowflake snapshot."""
+    with _lock:
+        if run_id in _runs:
+            return
+    rows = store.read("load_run", {"run_id": run_id})
+    run = _restore(json.loads(rows[0][0])) if rows else None
+    if run:
+        with _lock:
+            _runs.setdefault(run_id, run)
 
 
 def _run(run_id: str, user_id: str | None = None) -> Run:
@@ -158,10 +250,12 @@ def _map_state(run: Run) -> dict:
         "map": [n.to_dict() for n in run.nodes],
         "current_node_id": current.node_id if current else None,
         "run_status": run.status,
+        "player_name": run.player_name,
     }
 
 
-def start_run(user_id: str, deck_id: str) -> dict:
+def start_run(user_id: str, deck_id: str, player_name: str | None = None) -> dict:
+    _ensure_user(user_id)
     deck = get_deck(deck_id)
     if deck is None:
         raise GameError(404, "Unknown cartridge")
@@ -174,13 +268,16 @@ def start_run(user_id: str, deck_id: str) -> dict:
     ]
     nodes.append(Node("summit", "boss", "summit", SUMMIT[0], SUMMIT[1], None, deck.main_topic))
     nodes[0].status = "open"
-    run = Run(uuid.uuid4().hex, user_id, deck, nodes)
+    name = (player_name or "").strip()[:20] or "PLAYER"
+    run = Run(uuid.uuid4().hex, user_id, deck, nodes, player_name=name)
     with _lock:
         _runs[run.run_id] = run
+    _save(run)
     return _map_state(run)
 
 
 def get_map(run_id: str) -> dict:
+    _ensure_run(run_id)
     with _lock:
         return _map_state(_run(run_id))
 
@@ -235,6 +332,22 @@ def _reword(question: Question, trace: list[dict]) -> str | None:
         return None
 
 
+def _other_deck(deck: Deck) -> Deck | None:
+    """A different lecture for the dragon's slots 2-3: a real upload for a real upload,
+    the other demo for a demo; anything else only as a fallback."""
+    summaries, _ = list_decks()
+    others = [d for d in summaries if d["deck_id"] != deck.deck_id]
+    same = [d["deck_id"] for d in others if d["source"] == deck.source]
+    rest = [d["deck_id"] for d in others if d["source"] != deck.source]
+    random.shuffle(same)
+    random.shuffle(rest)
+    for deck_id in same + rest:
+        other = get_deck(deck_id)
+        if other and other.questions:
+            return other
+    return None
+
+
 def _build_fight(run: Run, node: Node) -> Fight:
     history = _history(run.user_id)
     deck = run.deck
@@ -259,9 +372,8 @@ def _build_fight(run: Run, node: Node) -> Fight:
         if latest:
             add(latest, deck, "memory", _reword(latest, trace))
         # Slots 2-3 (other lecture): questions from a different cartridge.
-        others = [d for d in (get_deck(i) for i in other_deck_ids(deck.deck_id)) if d and d.questions]
-        if others:
-            other = random.choice(others)
+        other = _other_deck(deck)
+        if other:
             for source in _ranked(list(other.questions), history, run.used)[:2]:
                 add(source, other, "other_lecture")
         # The rest: the whole topic, one subtopic at a time, weak points first.
@@ -297,6 +409,7 @@ def _fight_state(run: Run) -> dict:
 
 
 def enter_node(run_id: str, node_id: str) -> dict:
+    _ensure_run(run_id)
     with _lock:
         run = _run(run_id)
         if run.status != "active":
@@ -316,6 +429,7 @@ def enter_node(run_id: str, node_id: str) -> dict:
         if not fight.questions:
             raise GameError(422, "No questions for this node")
         run.fight = fight
+        _save(run)
         return _fight_state(run)
 
 
@@ -325,7 +439,13 @@ def _finish(run: Run, status: str) -> dict:
     run.fight = None
     seconds = round(run.ended_at - run.started_at)
     score = run.correct * 100 + run.hp * 50 + (500 if status == "won" else 0)
+    accuracy = round(run.correct / run.answered, 2) if run.answered else 0
     _scores.setdefault(run.user_id, []).append(score)
+    row = {"run_id": run.run_id, "deck_id": run.deck.deck_id, "user_id": run.user_id,
+           "player_name": run.player_name, "score": score, "accuracy": accuracy, "time_s": seconds,
+           "won": status == "won", "played_at": run.ended_at}
+    _recent_scores.setdefault(run.deck.deck_id, []).append(row)
+    store.write("insert_score", row)
     weak: dict[str, int] = {}
     for miss in run.misses:
         name = (get_deck(miss.deck_id) or run.deck).subtopic_name(miss.subtopic_no)
@@ -336,14 +456,17 @@ def _finish(run: Run, status: str) -> dict:
         "best_score": max(_scores[run.user_id]),
         "answered": run.answered,
         "correct": run.correct,
-        "accuracy": round(run.correct / run.answered, 2) if run.answered else 0,
+        "accuracy": accuracy,
         "time_s": seconds,
         "hp_left": run.hp,
         "weak_spots": [{"subtopic": k, "missed": v} for k, v in sorted(weak.items(), key=lambda kv: -kv[1])],
+        "bosses_beaten": [n.enemy for n in run.nodes if n.status == "cleared"],
     }
 
 
 def answer(user_id: str, run_id: str, q_id: str, choice: int | None) -> dict:
+    _ensure_user(user_id)
+    _ensure_run(run_id)
     with _lock:
         run = _run(run_id, user_id)
         fight = run.fight
@@ -359,8 +482,13 @@ def answer(user_id: str, run_id: str, q_id: str, choice: int | None) -> dict:
 
         correct = choice == fq.answer
         run.answered += 1
-        _attempts.append(Attempt(user_id, fq.source.q_id, fq.source.deck_id, fq.deck_name,
-                                 fq.source.subtopic_no, fq.subtopic, correct, time.time()))
+        attempt = Attempt(user_id, fq.source.q_id, fq.source.deck_id, fq.deck_name, fq.source.subtopic_no,
+                          fq.subtopic, correct, time.time(), fq.source.page, fq.source.quote)
+        _attempts.append(attempt)
+        store.write("insert_attempt", {
+            "user_id": user_id, "q_id": attempt.q_id, "deck_id": attempt.deck_id, "deck_name": attempt.deck_name,
+            "subtopic_no": attempt.subtopic_no, "subtopic": attempt.subtopic, "correct": correct,
+            "page_no": attempt.page, "quote": attempt.quote, "answered_at": attempt.at})
         fight.queue.pop(0)
         taunts = TAUNTS[fight.node.enemy]
         if correct:
@@ -387,6 +515,7 @@ def answer(user_id: str, run_id: str, q_id: str, choice: int | None) -> dict:
                 run.fight = None
             else:
                 run_over = _finish(run, "won")
+        _save(run)
 
         return {
             "correct": correct,
@@ -404,17 +533,26 @@ def answer(user_id: str, run_id: str, q_id: str, choice: int | None) -> dict:
 
 
 def report(user_id: str) -> dict:
+    _ensure_user(user_id)
     with _lock:
         mine = [a for a in _attempts if a.user_id == user_id]
         scores = _scores.get(user_id, [])
     groups: dict[tuple[str, int], dict] = {}
+    missed: dict[tuple[str, int], dict[tuple[int | None, str], int]] = {}
     for a in mine:
-        g = groups.setdefault((a.deck_id, a.subtopic_no), {
+        key = (a.deck_id, a.subtopic_no)
+        g = groups.setdefault(key, {
             "deck_id": a.deck_id, "deck_name": a.deck_name, "subtopic": a.subtopic, "answered": 0, "correct": 0})
         g["answered"] += 1
         g["correct"] += a.correct
+        if not a.correct and a.quote:
+            slides = missed.setdefault(key, {})
+            slides[(a.page, a.quote)] = slides.get((a.page, a.quote), 0) + 1
     subtopics = sorted(
-        ({**g, "accuracy": round(g["correct"] / g["answered"], 2)} for g in groups.values()),
+        ({**g, "accuracy": round(g["correct"] / g["answered"], 2),
+          "missed_slides": [{"page": page, "text": clean_math(text), "missed": n}
+                            for (page, text), n in sorted(missed.get(key, {}).items(), key=lambda kv: -kv[1])[:3]]}
+         for key, g in groups.items()),
         key=lambda g: (g["accuracy"], -g["answered"]),
     )
     correct = sum(a.correct for a in mine)
@@ -428,3 +566,17 @@ def report(user_id: str) -> dict:
             "best_score": max(scores, default=0),
         },
     }
+
+
+def scores(deck_id: str) -> dict:
+    """Top 10 for a cartridge: Snowflake rows plus any not written yet."""
+    rows = {r[0]: {"player_name": r[1] or "PLAYER", "score": int(r[2]), "accuracy": r[3], "time_s": r[4],
+                   "at": int(float(r[5]) * 1000)}
+            for r in store.read("deck_scores", {"deck_id": deck_id})}
+    with _lock:
+        for r in _recent_scores.get(deck_id, []):
+            rows.setdefault(r["run_id"], {"player_name": r["player_name"], "score": r["score"],
+                                          "accuracy": r["accuracy"], "time_s": r["time_s"],
+                                          "at": int(r["played_at"] * 1000)})
+    top = sorted(rows.values(), key=lambda r: (-r["score"], r["at"]))[:10]
+    return {"scores": top}

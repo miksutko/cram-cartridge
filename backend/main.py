@@ -1,21 +1,31 @@
 import logging
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from . import db, game
+from . import db, game, store
 from .decks import list_decks
 from .ingest import MAX_PDF_BYTES, UploadError, ingest
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Cram Cartridge API")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    yield
+    # Stopping or reloading the server: let queued game writes reach Snowflake first.
+    if not store.flush(15):
+        logger.warning("Some game writes did not reach Snowflake before shutdown")
+
+
+app = FastAPI(title="Cram Cartridge API", lifespan=lifespan)
 
 
 class RunRequest(BaseModel):
     user_id: str
     deck_id: str
+    player_name: str | None = None
 
 
 class NodeRequest(BaseModel):
@@ -77,7 +87,7 @@ def upload(file: UploadFile = File(...), name: str = Form(...)) -> dict[str, Any
 
 @app.post("/api/run")
 def run(body: RunRequest) -> dict[str, Any]:
-    return _game(game.start_run, body.user_id, body.deck_id)
+    return _game(game.start_run, body.user_id, body.deck_id, body.player_name)
 
 
 @app.get("/api/map")
@@ -98,3 +108,8 @@ def answer(body: AnswerRequest) -> dict[str, Any]:
 @app.get("/api/report")
 def report(user_id: str) -> dict[str, Any]:
     return game.report(user_id)
+
+
+@app.get("/api/scores")
+def scores(deck_id: str) -> dict[str, Any]:
+    return game.scores(deck_id)

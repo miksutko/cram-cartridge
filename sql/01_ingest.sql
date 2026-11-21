@@ -53,3 +53,41 @@ CREATE TABLE IF NOT EXISTS questions (
   page_no      INT,
   quote        STRING
 );
+
+-- Same PDF uploaded again -> reuse the cartridge instead of re-processing it.
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS file_hash STRING;
+
+-- Game data that must survive a backend restart.
+CREATE TABLE IF NOT EXISTS attempts (
+  user_id     STRING NOT NULL,
+  q_id        STRING NOT NULL,
+  deck_id     STRING NOT NULL,
+  deck_name   STRING,
+  subtopic_no INT,
+  subtopic    STRING,
+  correct     BOOLEAN NOT NULL,
+  page_no     INT,
+  quote       STRING,
+  answered_at FLOAT NOT NULL  -- epoch seconds
+);
+
+CREATE TABLE IF NOT EXISTS scores (
+  run_id      STRING NOT NULL,
+  deck_id     STRING NOT NULL,
+  user_id     STRING NOT NULL,
+  player_name STRING,
+  score       INT NOT NULL,
+  accuracy    FLOAT,
+  time_s      INT,
+  won         BOOLEAN,
+  played_at   FLOAT NOT NULL  -- epoch seconds
+);
+
+-- Latest snapshot of each run (JSON), so a restart does not lose a climb in progress.
+CREATE TABLE IF NOT EXISTS runs (
+  run_id     STRING NOT NULL,
+  user_id    STRING NOT NULL,
+  deck_id    STRING NOT NULL,
+  state_json STRING NOT NULL,
+  updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+);

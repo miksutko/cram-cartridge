@@ -11,8 +11,14 @@ PUT file://{file_name} @slides AUTO_COMPRESS = FALSE OVERWRITE = TRUE;
 ALTER STAGE slides REFRESH;
 
 -- name: insert_deck
-INSERT INTO decks (deck_id, name, file_name)
-VALUES (%(deck_id)s, %(name)s, %(file_name)s);
+INSERT INTO decks (deck_id, name, file_name, file_hash)
+VALUES (%(deck_id)s, %(name)s, %(file_name)s, %(file_hash)s);
+
+-- name: find_deck_by_hash
+SELECT deck_id FROM decks
+WHERE file_hash = %(file_hash)s AND status = 'ready'
+ORDER BY created_at DESC
+LIMIT 1;
 
 -- name: parse_slides
 INSERT INTO slides (deck_id, page_no, content)
@@ -130,3 +136,40 @@ SELECT q_no, subtopic_no, prompt, choices_json, answer_index, explanation, page_
 FROM questions
 WHERE deck_id = %(deck_id)s
 ORDER BY subtopic_no, q_no;
+
+-- name: insert_attempt
+INSERT INTO attempts (user_id, q_id, deck_id, deck_name, subtopic_no, subtopic, correct, page_no, quote, answered_at)
+VALUES (%(user_id)s, %(q_id)s, %(deck_id)s, %(deck_name)s, %(subtopic_no)s, %(subtopic)s, %(correct)s,
+        %(page_no)s, %(quote)s, %(answered_at)s);
+
+-- name: user_attempts
+SELECT q_id, deck_id, deck_name, subtopic_no, subtopic, correct, page_no, quote, answered_at
+FROM attempts
+WHERE user_id = %(user_id)s
+ORDER BY answered_at;
+
+-- name: insert_score
+INSERT INTO scores (run_id, deck_id, user_id, player_name, score, accuracy, time_s, won, played_at)
+VALUES (%(run_id)s, %(deck_id)s, %(user_id)s, %(player_name)s, %(score)s, %(accuracy)s, %(time_s)s,
+        %(won)s, %(played_at)s);
+
+-- name: user_scores
+SELECT score FROM scores WHERE user_id = %(user_id)s;
+
+-- name: deck_scores
+SELECT run_id, player_name, score, accuracy, time_s, played_at
+FROM scores
+WHERE deck_id = %(deck_id)s
+ORDER BY score DESC, played_at
+LIMIT 10;
+
+-- name: save_run
+MERGE INTO runs t
+USING (SELECT %(run_id)s AS run_id) s
+ON t.run_id = s.run_id
+WHEN MATCHED THEN UPDATE SET state_json = %(state_json)s, updated_at = CURRENT_TIMESTAMP()
+WHEN NOT MATCHED THEN INSERT (run_id, user_id, deck_id, state_json)
+  VALUES (%(run_id)s, %(user_id)s, %(deck_id)s, %(state_json)s);
+
+-- name: load_run
+SELECT state_json FROM runs WHERE run_id = %(run_id)s;

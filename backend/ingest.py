@@ -4,6 +4,7 @@ All AI work runs inside Snowflake. Python only moves rows and checks the JSON th
 model returns.
 """
 
+import hashlib
 import io
 import json
 import re
@@ -12,7 +13,7 @@ import uuid
 from typing import Any
 
 from . import db
-from .decks import Deck, Question, Subtopic, remember
+from .decks import Deck, Question, Subtopic, get_deck, remember
 from .queries import q
 
 MAX_PDF_BYTES = 50 * 1024 * 1024
@@ -200,11 +201,45 @@ def clean_questions(reply: str, pages: dict[int, str]) -> list[dict]:
     return out
 
 
+def _cached_upload(deck_id: str, trace: Trace) -> dict | None:
+    """The response for a cartridge that was already built from the same PDF."""
+    deck = get_deck(deck_id)
+    if deck is None:
+        return None
+    with db.get_connection() as conn, conn.cursor() as cur:
+        cur.execute(q("subtopic_chunk_counts"), {"deck_id": deck_id})
+        chunks = {int(no): int(n) for no, n in cur.fetchall() if no is not None}
+    return {
+        "deck_id": deck.deck_id,
+        "name": deck.name,
+        "main_topic": deck.main_topic,
+        "subtopics": [{"subtopic_no": s.no, "name": s.name, "chunks": chunks.get(s.no, 0),
+                       "questions": sum(1 for x in deck.questions if x.subtopic_no == s.no)}
+                      for s in deck.subtopics],
+        "slides": deck.slide_count,
+        "chunks": deck.chunk_count,
+        "trace": trace.steps,
+        "cached": True,
+    }
+
+
 def ingest(pdf: bytes, name: str) -> dict:
     deck_id = uuid.uuid4().hex
     file_name = f"{deck_id}.pdf"
+    file_hash = hashlib.sha256(pdf).hexdigest()
     params = {"deck_id": deck_id}
     trace = Trace()
+
+    with db.get_connection() as conn:
+        db.ensure_schema(conn)
+        cur = conn.cursor()
+        trace.run(cur, "Cache check (same PDF?)", q("find_deck_by_hash"), {"file_hash": file_hash})
+        existing = cur.fetchone()
+        cur.close()
+    if existing:
+        cached = _cached_upload(existing[0], trace)
+        if cached:
+            return cached
 
     with db.get_connection() as conn:
         db.ensure_schema(conn)
@@ -212,7 +247,7 @@ def ingest(pdf: bytes, name: str) -> dict:
         try:
             trace.run(cur, "PUT @slides", q("put_pdf").format(file_name=file_name), file_stream=io.BytesIO(pdf))
             cur.execute(q("refresh_stage"))
-            cur.execute(q("insert_deck"), {**params, "name": name, "file_name": file_name})
+            cur.execute(q("insert_deck"), {**params, "name": name, "file_name": file_name, "file_hash": file_hash})
 
             trace.run(cur, "AI_PARSE_DOCUMENT", q("parse_slides"), {**params, "file_name": file_name})
             slide_count = cur.rowcount or 0
