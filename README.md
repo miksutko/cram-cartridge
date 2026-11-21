@@ -110,10 +110,7 @@ The summit fight opens with a **reworded version of your latest mistake**. Its n
 come from **your other lectures**: Snowflake ranks every question on every cartridge by cosine
 similarity to that mistake and brings in the closest ones, score shown.
 
-| | |
-|---|---|
-| <img src="docs/img/dragon-memory.png" alt="The dragon rewords your latest mistake"> | <img src="docs/img/other-lecture.png" alt="A question from another lecture with its similarity score"> |
-| "You missed this": your mistake, reworded | Closest question from another lecture |
+<p align="center"><img src="docs/img/dragon-memory.png" alt="The dragon rewords your latest mistake" width="75%"></p>
 
 ### 7. Results, weak spots and high scores
 
