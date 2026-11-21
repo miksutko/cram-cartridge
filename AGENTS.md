@@ -55,7 +55,9 @@ assets only; never copy art, characters or names from existing games.
 - GET  /api/decks?user_id= -> {decks:[{deck_id, name, main_topic, source, subtopics, slides}], snowflake_error}
 - POST /api/upload  multipart file,name -> {deck_id, name, main_topic, subtopics, slides, chunks, trace}
                     (+ cached: true when the same PDF was uploaded before)
-- POST /api/run     {user_id, deck_id, player_name?} -> {run_id, hp, max_hp, items, map, current_node_id, player_name}
+- POST /api/run     {user_id, deck_id, player_name?, judge?} -> {run_id, hp, max_hp, items, map, current_node_id, player_name, judge}
+                    judge's climb (judge: true, or the name JUDGE): 1 question per stop, a 3-question dragon,
+                    the right answer ends with " •", and nothing is saved (scores, answers, runs)
 - GET  /api/map?run_id= -> {run_id, main_topic, hp, max_hp, items, map, current_node_id}
 - POST /api/node    {run_id, node_id} -> fight {kind, enemy, questions, current_q_id, trace} | treasure {kind, choices}
                     (dragon: other_lecture questions carry similarity, the cosine score vs your latest miss;

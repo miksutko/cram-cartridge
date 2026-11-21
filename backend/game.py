@@ -28,6 +28,12 @@ MINIBOSS_QUESTIONS = 3
 BLITZ_QUESTIONS = 4
 BOSS_QUESTIONS = 8
 
+# The judge's climb (name JUDGE, or judge: true): every stop with 1 question, a 3-question
+# dragon, the right answer marked with a dot, and nothing saved.
+JUDGE_NAME = "JUDGE"
+JUDGE_MARK = " \u2022"
+JUDGE_COUNTS = {"enemy": 1, "miniboss": 1, "blitz": 1, "boss": 3}
+
 BLITZ_LIMIT_MS = 10_000
 BLITZ_GRACE_S = 2.0  # a late answer within this is still accepted (network, animation)
 AFTER_HIT_S = 1.2  # the client's result screen before the next Blitz question
@@ -151,6 +157,7 @@ class Run:
     last_answer: tuple[str, dict] | None = None  # (q_id, response) to replay a duplicate submit
     items: dict[str, int] = field(default_factory=dict)  # item_id -> count
     shield: bool = False  # Aegis Ward: the next miss costs no HP
+    judge: bool = False  # the judge's climb: short, answers marked, nothing saved
 
     def current_node(self) -> Node | None:
         return next((n for n in self.nodes if n.status == "open"), None)
@@ -252,6 +259,8 @@ def _restore(state: dict) -> Run | None:
 
 
 def _save(run: Run) -> None:
+    if run.judge:
+        return  # judge runs leave no trace
     store.write("save_run", {"run_id": run.run_id, "user_id": run.user_id, "deck_id": run.deck.deck_id,
                              "state_json": _snapshot(run)})
 
@@ -295,10 +304,11 @@ def _map_state(run: Run) -> dict:
         "current_node_id": current.node_id if current else None,
         "run_status": run.status,
         "player_name": run.player_name,
+        "judge": run.judge,
     }
 
 
-def start_run(user_id: str, deck_id: str, player_name: str | None = None) -> dict:
+def start_run(user_id: str, deck_id: str, player_name: str | None = None, judge: bool = False) -> dict:
     _ensure_user(user_id)
     deck = get_deck(deck_id)
     if deck is None:
@@ -318,7 +328,8 @@ def start_run(user_id: str, deck_id: str, player_name: str | None = None) -> dic
     nodes.append(Node("summit", "boss", "summit", SUMMIT[0], SUMMIT[1], None, deck.main_topic))
     nodes[0].status = "open"
     name = (player_name or "").strip()[:20] or "PLAYER"
-    run = Run(uuid.uuid4().hex, user_id, deck, nodes, player_name=name)
+    judge = judge or name.upper() == JUDGE_NAME
+    run = Run(uuid.uuid4().hex, user_id, deck, nodes, player_name=name, judge=judge)
     with _lock:
         _runs[run.run_id] = run
     _save(run)
@@ -448,6 +459,8 @@ def _build_fight(run: Run, node: Node) -> Fight:
 
     if node.kind in ("enemy", "miniboss"):
         count = ENEMY_QUESTIONS if node.kind == "enemy" else MINIBOSS_QUESTIONS
+        if run.judge:
+            count = JUDGE_COUNTS[node.kind]
         pool = [x for x in deck.questions if x.subtopic_no == node.subtopic_no]
         for source in _ranked(pool, history, run.used)[:count]:
             add(source, deck)
@@ -455,7 +468,7 @@ def _build_fight(run: Run, node: Node) -> Fight:
         # Everything climbed so far, weak points first, against the clock.
         reached = {n.subtopic_no for n in run.nodes if isinstance(n.level, int) and n.level <= node.level}
         pool = [x for x in deck.questions if x.subtopic_no in reached]
-        for source in _ranked(pool, history, run.used)[:BLITZ_QUESTIONS]:
+        for source in _ranked(pool, history, run.used)[:JUDGE_COUNTS["blitz"] if run.judge else BLITZ_QUESTIONS]:
             add(source, deck)
         for fq in picked:
             fq.time_limit_ms = BLITZ_LIMIT_MS
@@ -492,11 +505,16 @@ def _build_fight(run: Run, node: Node) -> Fight:
         for x in _ranked(list(deck.questions), history, run.used, near):
             if x.q_id not in {p.source.q_id for p in picked}:
                 by_subtopic.setdefault(x.subtopic_no, []).append(x)
-        while len(picked) < BOSS_QUESTIONS and any(by_subtopic.values()):
+        boss_count = JUDGE_COUNTS["boss"] if run.judge else BOSS_QUESTIONS
+        while len(picked) < boss_count and any(by_subtopic.values()):
             for pool in by_subtopic.values():
-                if pool and len(picked) < BOSS_QUESTIONS:
+                if pool and len(picked) < boss_count:
                     add(pool.pop(0), deck)
 
+    if run.judge:  # mark the right answer so the judge can move fast (or miss on purpose)
+        picked = picked[:JUDGE_COUNTS.get(node.kind, len(picked))]
+        for fq in picked:
+            fq.choices = [c + JUDGE_MARK if i == fq.answer else c for i, c in enumerate(fq.choices)]
     questions = {fq.q_id: fq for fq in picked}
     deadline = time.time() + BLITZ_LIMIT_MS / 1000 if node.kind == "blitz" else None
     return Fight(node, questions, list(questions), len(picked), len(picked), trace, deadline)
@@ -585,12 +603,13 @@ def _finish(run: Run, status: str) -> dict:
     seconds = round(run.ended_at - run.started_at)
     score = run.correct * 100 + run.hp * 50 + (500 if status == "won" else 0)
     accuracy = round(run.correct / run.answered, 2) if run.answered else 0
-    _scores.setdefault(run.user_id, []).append(score)
-    row = {"run_id": run.run_id, "deck_id": run.deck.deck_id, "user_id": run.user_id,
-           "player_name": run.player_name, "score": score, "accuracy": accuracy, "time_s": seconds,
-           "won": status == "won", "played_at": run.ended_at}
-    _recent_scores.setdefault(run.deck.deck_id, []).append(row)
-    store.write("insert_score", row)
+    if not run.judge:
+        _scores.setdefault(run.user_id, []).append(score)
+        row = {"run_id": run.run_id, "deck_id": run.deck.deck_id, "user_id": run.user_id,
+               "player_name": run.player_name, "score": score, "accuracy": accuracy, "time_s": seconds,
+               "won": status == "won", "played_at": run.ended_at}
+        _recent_scores.setdefault(run.deck.deck_id, []).append(row)
+        store.write("insert_score", row)
     weak: dict[str, int] = {}
     for miss in run.misses:
         name = (get_deck(miss.deck_id) or run.deck).subtopic_name(miss.subtopic_no)
@@ -598,7 +617,7 @@ def _finish(run: Run, status: str) -> dict:
     return {
         "won": status == "won",
         "score": score,
-        "best_score": max(_scores[run.user_id]),
+        "best_score": max(_scores.get(run.user_id, []) + [score]),
         "answered": run.answered,
         "correct": run.correct,
         "accuracy": accuracy,
@@ -644,11 +663,12 @@ def answer(user_id: str, run_id: str, q_id: str, choice: int | None) -> dict:
         run.answered += 1
         attempt = Attempt(user_id, fq.source.q_id, fq.source.deck_id, fq.deck_name, fq.source.subtopic_no,
                           fq.subtopic, correct, time.time(), fq.source.page, fq.source.quote)
-        _attempts.append(attempt)
-        store.write("insert_attempt", {
-            "user_id": user_id, "q_id": attempt.q_id, "deck_id": attempt.deck_id, "deck_name": attempt.deck_name,
-            "subtopic_no": attempt.subtopic_no, "subtopic": attempt.subtopic, "correct": correct,
-            "page_no": attempt.page, "quote": attempt.quote, "answered_at": attempt.at})
+        if not run.judge:  # judge runs do not touch the player's history (weak spots, replays)
+            _attempts.append(attempt)
+            store.write("insert_attempt", {
+                "user_id": user_id, "q_id": attempt.q_id, "deck_id": attempt.deck_id,
+                "deck_name": attempt.deck_name, "subtopic_no": attempt.subtopic_no, "subtopic": attempt.subtopic,
+                "correct": correct, "page_no": attempt.page, "quote": attempt.quote, "answered_at": attempt.at})
         fight.queue.pop(0)
         taunts = TAUNTS.get(fight.node.enemy, GENERIC_TAUNTS)
         if correct:

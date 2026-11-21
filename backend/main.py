@@ -29,6 +29,7 @@ class RunRequest(BaseModel):
     user_id: str
     deck_id: str
     player_name: str | None = None
+    judge: bool = False  # the judge's climb (also on with the name JUDGE)
 
 
 class NodeRequest(BaseModel):
@@ -102,7 +103,7 @@ def upload(file: UploadFile = File(...), name: str = Form(...)) -> dict[str, Any
 
 @app.post("/api/run")
 def run(body: RunRequest) -> dict[str, Any]:
-    return _game(game.start_run, body.user_id, body.deck_id, body.player_name)
+    return _game(game.start_run, body.user_id, body.deck_id, body.player_name, body.judge)
 
 
 @app.get("/api/map")
