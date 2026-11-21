@@ -60,9 +60,9 @@ One level per subtopic, each a biome with its own mini boss, and the dragon at t
 | Level | Biome | Boss |
 |---|---|---|
 | 1 | Underground | Minotaur |
-| 2 | Stormy cave | Kraken |
-| 3 | Dead forest | Forest beast |
-| Summit | Cloudy summit | The dragon |
+| 2 | Stormy cave | Hydra |
+| 3 | Dead forest | Thornhart |
+| Summit | Cloudy summit | Retep, the dragon |
 
 <p align="center"><img src="docs/img/map.png" alt="The mountain map" width="75%"></p>
 
@@ -80,7 +80,7 @@ one-line explanation. A missed question comes back before the fight ends.
 
 <p align="center"><img src="docs/img/slide-quote.png" alt="The slide you missed" width="75%"></p>
 
-### 6. The dragon remembers
+### 6. Retep, the dragon, remembers
 
 The summit fight opens with a **reworded version of your latest mistake**. Its next two questions
 come from **your other lectures**: Snowflake ranks every question on every cartridge by cosine
@@ -100,6 +100,14 @@ Climb again and those weak spots come first.
 |---|---|---|
 | <img src="docs/img/results.png" alt="Results"> | <img src="docs/img/weak-spots.png" alt="Weak spots"> | <img src="docs/img/high-scores.png" alt="High scores"> |
 | Results | Weak spots | High scores |
+
+## Art and audio
+
+All game art (sprites, backgrounds, icons, the console frame) is original and drawn in code in
+[`frontend/src/art/`](frontend/src/art); nothing is copied from existing games. A designer can
+replace any sprite by dropping `frontend/src/assets/sprites/<id>.png` (see the `#/gallery` page in
+the running game). Music goes in `frontend/src/assets/music/` by slot name and plays through a retro
+filter; every track must be licensed for this use and credited here.
 
 ## Powered by Snowflake
 
@@ -178,7 +186,7 @@ docs/img/   screenshots for this README
 ## What's next
 
 - Treasure rooms and power-ups, Blitz rounds and typed answers (the screens exist; the backend comes next)
-- Levels 4 and 5 (Snowy mountain with the Yeti, Volcano with the Phoenix)
+- Regular enemies on each level, and levels 4 and 5 (Snowy mountain with the Yeti, Volcano with the Phoenix)
 - Branching paths picked by how well you are doing
 
 ## Team
